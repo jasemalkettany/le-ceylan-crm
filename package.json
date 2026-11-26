@@ -2,7 +2,7 @@
   "name": "le-ceylan-crm",
   "private": true,
   "scripts": {
-    "build": "rm -rf docs/app.js docs/chunks && esbuild src/app.js --bundle --splitting --format=esm --minify --target=es2020 --outdir=docs --chunk-names=chunks/[name]-[hash]"
+    "build": "sh build.sh"
   },
   "dependencies": { "firebase": "^12.0.0", "xlsx": "0.18.5", "mammoth": "1.8.0" },
   "devDependencies": { "esbuild": "^0.24.0" }
