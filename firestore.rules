@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function hasProfile() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function active() { return hasProfile() && me().get('active', true) == true; }
+    function isStaff() { return active() && me().role in ['admin', 'manager', 'staff']; }
+    function isAdmin() { return active() && me().role in ['admin', 'manager']; }
+    function isAgent() { return active() && me().role == 'agent'; }
+    function myAgent() { return me().get('agentId', ''); }
+
+    // logins: everyone reads their own; staff see the team; only admins change them
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isStaff());
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /settings/main { allow read: if active(); allow write: if isAdmin(); }
+    match /settings/counters { allow read, write: if isStaff(); }
+
+    match /agents/{id} {
+      allow read: if isStaff() || (isAgent() && myAgent() == id);
+      allow write: if isStaff();
+    }
+
+    // portal content: agents see published items only
+    match /offers/{id} {
+      allow read: if isStaff() || (isAgent() && resource.data.published == true);
+      allow write: if isStaff();
+    }
+    match /itineraries/{id} {
+      allow read: if isStaff() || (isAgent() && resource.data.published == true);
+      allow write: if isStaff();
+    }
+
+    // agents read a price-only copy of their own bookings, never the costed booking
+    match /portalBookings/{id} {
+      allow read: if isStaff() || (isAgent() && resource.data.agent == myAgent());
+      allow write: if isStaff();
+    }
+
+    match /requests/{id} {
+      allow read: if isStaff() || (isAgent() && resource.data.agentId == myAgent());
+      allow create: if isStaff() || (isAgent() && request.resource.data.agentId == myAgent() && request.resource.data.status == 'New request');
+      allow update, delete: if isStaff();
+    }
+
+    // internal records: staff only
+    match /bookings/{id} { allow read, write: if isStaff(); }
+    match /quotes/{id} { allow read, write: if isStaff(); }
+    match /inquiries/{id} { allow read, write: if isStaff(); }
+    match /rates/{id} { allow read, write: if isStaff(); }
+    match /suppliers/{id} { allow read, write: if isStaff(); }
+  }
+}
