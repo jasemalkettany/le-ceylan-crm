@@ -70,20 +70,32 @@ V.suppliers = { title: 'Suppliers', render() {
   ${table(['Supplier', 'Type', 'Destination', 'Contact', 'Email', 'Phone', 'Rates '], r.map(a => `<tr class="click" data-go="supplier/${esc(a.id)}"><td><b>${esc(a.name)}</b></td><td>${esc(a.type)}</td><td>${esc(a.destination)}</td><td>${esc(a.contact)}</td><td>${esc(a.email)}</td><td>${esc(a.phone)}</td><td class="num">${S.rates.filter(x => x.supplierId === a.id).length}</td></tr>`), 'No suppliers registered.')}</div>`;
 } };
 
+V.arrivals = { title: 'Arrivals & departures', render() {
+  const t = today(), end = addDays(t, 14); const live = S.bookings.filter(inCo).filter(b => b.status !== 'Cancelled');
+  const ev = []; live.forEach(b => { if (b.arrival >= t && b.arrival <= end) ev.push({ d: b.arrival, k: 'Arrival', b, f: b.flightIn }); if (b.departure && b.departure >= t && b.departure <= end) ev.push({ d: b.departure, k: 'Departure', b, f: b.flightOut }); });
+  ev.sort((x, y) => x.d.localeCompare(y.d) || x.k.localeCompare(y.k));
+  return `<div class="pagehead"><div><h1>Arrivals & departures</h1><p class="lead">The next 14 days, for the operations team and drivers.</p></div></div>
+  <div class="card">${table(['Date', 'Movement', 'Tour', 'Lead guest', 'Pax', 'Flight', 'Agent', 'Status'], ev.map(e => `<tr class="click" data-go="booking/${esc(e.b.id)}"><td><b>${esc(e.d)}</b></td><td>${tagFor(e.k === 'Arrival' ? 'Active' : 'Sent').replace(/>[^<]+</, '>' + e.k + '<')}</td><td class="ref">${esc(e.b.no)}</td><td>${esc(e.b.lead)}</td><td>${paxOf(e.b)}</td><td>${esc(e.f)}</td><td>${esc(agentName(e.b.agent))}</td><td>${tagFor(e.b.status || 'Under process')}</td></tr>`), 'No arrivals or departures in the next 14 days.')}</div>`;
+} };
+
 /* ---------- finance ---------- */
-V.finance = { title: 'Accounts & Finance', render() {
-  const ft = UI.tab.fin || 'recv';
+V.finance = { title: 'Accounts & Finance', render(id) {
+  const ft = id || 'recv';
   const bk = S.bookings.filter(inCo).filter(b => b.status !== 'Cancelled');
-  const tabs = [['recv', 'Invoices'], ['stmt', 'Statements'], ['pay', 'Supplier bills'], ['pl', 'P&L & reports'], ['qb', 'Accounts & export']].map(([k, l]) => `<button class="${ft === k ? 'on' : ''}" data-act="tab" data-k="fin" data-id="${k}">${l}</button>`).join('');
-  let body = '';
+    let body = '';
   if (ft === 'recv') body = table(['Invoice', 'Tour', 'Agent', 'Due', 'Invoiced ', 'Received ', 'Balance ', 'Status'], bk.map(b => { const t = totals(b).sell, r = received(b), bal = t - r; const st = bal <= .5 ? 'Paid' : r > 0 ? 'Part paid' : (b.dueDate && b.dueDate < today() ? 'Overdue' : 'Unpaid'); return { b, t, r, bal, st }; }).sort((x, y) => (x.b.dueDate || '').localeCompare(y.b.dueDate || '')).map(({ b, t, r, bal, st }) => `<tr class="click" data-go="booking/${esc(b.id)}"><td><b class="ref">${esc(b.invoiceNo)}</b></td><td>${esc(b.no)}</td><td>${esc(agentName(b.agent))}</td><td>${esc(b.dueDate)}</td><td class="num">${esc(fmt(t, b.currency))}</td><td class="num">${esc(fmt(r, b.currency))}</td><td class="num"><b>${esc(fmt(bal, b.currency))}</b></td><td>${tagFor(st)}</td></tr>`), 'No invoices yet. Invoices come from bookings.');
   if (ft === 'pay') { const rows = []; bk.forEach(b => flatLines(b).forEach(l => { const due = l.netLocal - num(l.paid); if (due > .5) rows.push(`<tr class="click" data-go="booking/${esc(b.id)}"><td class="ref">${esc(b.no)}</td><td>${esc(supName(l.supplier, l))}</td><td>${esc(l.desc)}</td><td>${esc(l.date || b.arrival)}</td><td class="num">${esc(fmt(l.netLocal, l.currency))}</td><td class="num">${esc(fmt(l.paid, l.currency))}</td><td class="num"><b>${esc(fmt(due, l.currency))}</b></td></tr>`); })); body = `<p class="note">The owner approves every supplier payment before it is paid.</p>` + table(['Tour', 'Supplier', 'Service', 'Date', 'Cost ', 'Paid ', 'To pay '], rows, 'No unpaid supplier bills.'); }
   if (ft === 'pl') body = table(['Tour', 'Agent', 'Arrival', 'Selling ', 'Net cost ', 'Profit ', 'Margin '], bk.slice().sort((a, b) => (b.arrival || '').localeCompare(a.arrival || '')).map(b => { const t = totals(b); return `<tr class="click" data-go="booking/${esc(b.id)}"><td class="ref">${esc(b.no)}</td><td>${esc(agentName(b.agent))}</td><td>${esc(b.arrival)}</td><td class="num">${esc(fmt(t.sell, b.currency))}</td><td class="num">${esc(fmt(t.net, b.currency))}</td><td class="num"><b>${esc(fmt(t.sell - t.net, b.currency))}</b></td><td class="num">${t.margin.toFixed(1)}%</td></tr>`; }), 'No bookings yet.');
   if (ft === 'stmt') body = `<div class="row"><div style="flex:1;max-width:380px">${sel('stmtAgent', agentOpts(), '', 'id="stmtAgent"')}</div><button class="btn p" data-act="stmt">Open statement</button></div><p class="note">Every invoice and payment for the agent, with a running balance.</p>`;
   if (ft === 'qb') body = `<h3 style="font-size:15px;margin-bottom:8px">QuickBooks export</h3><div class="grid"><label>From${inp('qbFrom', today().slice(0, 8) + '01', 'date', 'id="qbFrom"')}</label><label>To${inp('qbTo', today(), 'date', 'id="qbTo"')}</label></div>
     <div class="row" style="margin-top:12px"><button class="btn p" data-act="qb" data-id="inv">Invoices CSV</button><button class="btn" data-act="qb" data-id="pay">Payments received CSV</button><button class="btn" data-act="qb" data-id="bills">Supplier bills CSV</button><button class="btn" data-act="qb" data-id="cust">Customers CSV</button></div>
-    <p class="note">Choose one company at the top first. Import the files in QuickBooks Online under Settings → Import data.</p>`;
-  return `<div class="pagehead"><div><h1>Accounts & finance</h1><p class="lead">Invoices, statements, supplier bills and exports.</p></div></div><div class="tabs">${tabs}</div><div class="card">${body}</div>`;
+    <p class="note">Choose one company at the top first. Import the files in QuickBooks Online under Settings → Import data.</p>
+    <h3 style="font-size:15px;margin:22px 0 8px;color:var(--indigo)">Import from QuickBooks</h3>
+    <div class="g2"><div class="drop"><b>Customers</b><div class="note" style="margin:4px 0 8px">QuickBooks → Sales → Customers → Export. New customers become travel agents; existing ones are updated.</div><label class="btn s">Choose CSV or Excel<input type="file" class="qbIn" data-kind="customers" accept=".csv,.xlsx,.xls" hidden></label></div>
+    <div class="drop"><b>Payments received</b><div class="note" style="margin:4px 0 8px">QuickBooks → Reports → Transaction list (Payments) → Export. Each payment is matched to its invoice number here.</div><label class="btn s">Choose CSV or Excel<input type="file" class="qbIn" data-kind="payments" accept=".csv,.xlsx,.xls" hidden></label></div></div>
+    <div id="qbPreview"></div>`;
+  const heads = { recv: ['Invoices', 'Every invoice from your bookings, with what is still owed.'], stmt: ['Statements', 'Statement of account for any travel agent.'], pay: ['Supplier bills', 'What you still owe hotels, transport and other suppliers.'], pl: ['P&L & reports', 'Profit on every tour.'], qb: ['QuickBooks', 'Export to QuickBooks and import from it — no paid connection needed.'] }[ft] || ['Finance', ''];
+  return `<div class="pagehead"><div><h1>${heads[0]}</h1><p class="lead">${heads[1]}</p></div></div><div class="card">${body}</div>`;
 } };
 
 /* ---------- quotation: the 8 steps ---------- */

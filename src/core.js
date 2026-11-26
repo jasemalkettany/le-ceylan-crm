@@ -29,8 +29,8 @@ export const coById = id => cfg().companies.find(c => c.id === id) || { name: ''
 export const agentName = id => (S.agents.find(a => a.id === id) || (S.myAgent?.id === id ? S.myAgent : {}) || {}).name || '';
 export const supName = (id, l) => (S.suppliers.find(a => a.id === id) || {}).name || l?.supplierName || '';
 export const userName = id => { const u = S.users.find(x => x.id === id); return u?.name || u?.email || ''; };
-export const curCo = () => { try { return localStorage.getItem('lc_co') || ''; } catch (e) { return ''; } };
-export const inCo = r => !curCo() || !r.company || r.company === curCo();
+export const curCo = () => { let v = ''; try { v = localStorage.getItem('lc_co') || ''; } catch (e) { } const al = S.me?.companies || []; if (al.length && !al.includes(v)) return al.length === 1 ? al[0] : ''; return v; };
+export const inCo = r => { if (curCo()) return !r.company || r.company === curCo(); const al = S.me?.companies; return !al?.length || !r.company || al.includes(r.company); };
 export const fx = (amt, from, to) => { const r = cfg().fx || {}; if (from === to) return num(amt); const a = num(r[from]), b = num(r[to]); if (!a || !b) return NaN; return num(amt) * a / b; };
 export const byNew = (a, b) => (b.createdAt || '').localeCompare(a.createdAt || '');
 export const search = () => ($('#q')?.value || '').trim().toLowerCase();

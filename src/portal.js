@@ -50,6 +50,15 @@ P.bookings = { title: 'My bookings', render() {
   const r = S.bookings.slice().sort((a, b) => (b.arrival || '').localeCompare(a.arrival || ''));
   return `<div class="card">${table(['Tour', 'Lead guest', 'Arrival', 'Departure', 'Total ', 'Balance ', 'Status', ''], r.map(b => { const t = totals(b).sell, rc = received(b); return `<tr><td><b>${esc(b.no)}</b><div class="note">${esc(b.agentRef)}</div></td><td>${esc(b.lead)}</td><td>${esc(b.arrival)}</td><td>${esc(b.departure)}</td><td class="num">${esc(fmt(t, b.currency))}</td><td class="num">${esc(fmt(t - rc, b.currency))}</td><td>${tagFor(b.status)}</td><td><button class="btn s" data-act="agentDoc" data-k="confirm" data-id="${esc(b.id)}">Voucher</button> <button class="btn s" data-act="agentDoc" data-k="proforma" data-id="${esc(b.id)}">Invoice</button></td></tr>`; }), 'No bookings yet.')}</div>`;
 } };
+P.invoices = { title: 'Invoices', render() {
+  const r = S.bookings.filter(b => b.invoiceNo).sort((a, b) => (b.invoiceDate || '').localeCompare(a.invoiceDate || ''));
+  return `<div class="pagehead"><div><h1>Invoices</h1><p class="lead">Every invoice issued to you, with what is paid and what is still due.</p></div></div>
+  <div class="card">${table(['Invoice', 'Date', 'Tour', 'Lead guest', 'Due', 'Total ', 'Paid ', 'Balance ', 'Status', ''], r.map(b => { const t = totals(b).sell, rc = received(b), bal = t - rc; const st = bal <= .5 ? 'Paid' : rc > 0 ? 'Part paid' : (b.dueDate && b.dueDate < today() ? 'Overdue' : 'Unpaid'); return `<tr><td class="ref">${esc(b.invoiceNo)}</td><td>${esc(b.invoiceDate)}</td><td>${esc(b.no)}</td><td>${esc(b.lead)}</td><td>${esc(b.dueDate)}</td><td class="num">${esc(fmt(t, b.currency))}</td><td class="num">${esc(fmt(rc, b.currency))}</td><td class="num"><b>${esc(fmt(bal, b.currency))}</b></td><td>${tagFor(st)}</td><td><button class="btn s" data-act="agentDoc" data-k="proforma" data-id="${esc(b.id)}">Open</button></td></tr>`; }), 'No invoices yet.')}</div>`;
+} };
+P.statement = { title: 'Statement of account', render() {
+  return `<div class="pagehead"><div><h1>Statement of account</h1><p class="lead">Invoices and payments with your running balance.</p></div><button class="btn p" data-act="myStatement">Print or save as PDF</button></div>
+  <div class="card"><div id="stmtBox"></div></div>`;
+} };
 P.account = { title: 'My account', render() {
   const a = S.myAgent || {};
   return `<div class="card"><h2>${esc(a.name)}</h2><div class="grid"><div><span class="note">Agent code</span><div>${esc(a.code)}</div></div><div><span class="note">Contact</span><div>${esc(a.contact)}</div></div><div><span class="note">Email</span><div>${esc(a.email)}</div></div><div><span class="note">Phone</span><div>${esc(a.phone)}</div></div><div><span class="note">Billing currency</span><div>${esc(a.currency)}</div></div></div></div>

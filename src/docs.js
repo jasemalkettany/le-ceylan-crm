@@ -38,7 +38,7 @@ export function buildDoc(kind, r) {
 }
 
 export function statement(agentId) {
-  const a = S.agents.find(x => x.id === agentId) || {};
+  const a = S.agents.find(x => x.id === agentId) || (S.myAgent?.id === agentId ? S.myAgent : {}) || {};
   const bk = S.bookings.filter(b => b.agent === agentId && b.status !== 'Cancelled' && inCo(b)); const ev = [];
   bk.forEach(b => { ev.push({ d: b.invoiceDate || b.arrival || '', ref: `${b.invoiceNo} · ${b.no} · ${b.lead || ''}`, dr: totals(b).sell, cr: 0, c: b.currency }); (b.payments || []).forEach(p => ev.push({ d: p.date || '', ref: `Payment ${p.ref || p.method || ''} · ${b.invoiceNo}`, dr: 0, cr: num(p.amount), c: b.currency })); });
   ev.sort((x, y) => x.d.localeCompare(y.d)); const curs = [...new Set(ev.map(e => e.c))];
