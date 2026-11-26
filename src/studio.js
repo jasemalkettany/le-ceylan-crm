@@ -255,7 +255,7 @@ export async function importContacts(file) {
   const pick = (r, ...ks) => { for (const k of Object.keys(r)) if (ks.some(x => k.toLowerCase().replace(/[^a-z]/g, '').includes(x))) return String(r[k]).trim(); return ''; };
   const have = new Set(contactList().map(c => (c.email || '').toLowerCase())); let n = 0, skip = 0;
   for (const r of rows) { const email = pick(r, 'email', 'mail').toLowerCase(); if (!/.+@.+\..+/.test(email) || have.has(email)) { skip++; continue; }
-    await save('contacts', { agency: pick(r, 'agency', 'company'), name: pick(r, 'name', 'contact'), email, phone: pick(r, 'phone', 'mobile', 'whatsapp'), country: pick(r, 'country'), lang: pick(r, 'language', 'lang') }, { silent: true }); have.add(email); n++; }
+    await save('contacts', { agency: pick(r, 'agency', 'company'), name: pick(r, 'name', 'contact'), email, phone: pick(r, 'phone', 'mobile', 'whatsapp'), country: pick(r, 'country'), lang: pick(r, 'language', 'lang'), status: /bounce/i.test(pick(r, 'status')) ? 'Bounced' : /unsub/i.test(pick(r, 'status')) ? 'Unsubscribed' : '' }, { silent: true }); have.add(email); n++; }
   toast(`${n} contacts imported${skip ? `, ${skip} skipped (no email or already there)` : ''}`);
 }
 
