@@ -5,12 +5,18 @@ service cloud.firestore {
     function hasProfile() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
     function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
     function active() { return hasProfile() && me().get('active', true) == true; }
-    function isStaff() { return active() && me().role in ['admin', 'manager', 'staff']; }
+    function isStaff() { return active() && me().role in ['admin', 'manager', 'salesmgr', 'salesexec', 'operations', 'accountant', 'dataentry', 'staff']; }
+    function isBoss() { return active() && me().role == 'admin'; }
+    function role() { return me().role; }
+    function preset(r) { return r == 'manager' ? ['sales', 'operations', 'rates', 'finance', 'hr'] : r == 'salesmgr' ? ['sales', 'rates'] : r == 'operations' ? ['operations', 'rates'] : r == 'accountant' ? ['finance'] : r == 'dataentry' ? ['rates'] : ['sales']; }
+    // data entry may only add or change records that wait for the admin; only the admin approves
+    function entryOk() { return role() != 'dataentry' ? (request.resource.data.get('approved', true) == true && resource != null && resource.data.get('approved', true) == false ? isBoss() : true) : (request.resource.data.get('approved', true) == false && request.resource.data.get('published', false) == false); }
+    function ownFile() { return role() != 'salesexec' || resource.data.get('createdBy', '') == request.auth.uid; }
     function isAdmin() { return active() && me().role in ['admin', 'manager']; }
     function isAgent() { return active() && me().role == 'agent'; }
     function myAgent() { return me().get('agentId', ''); }
     // department access: admins open everything, other staff only the sections on their login
-    function can(sec) { return isStaff() && (me().role == 'admin' || sec in me().get('sections', me().role == 'manager' ? ['sales', 'operations', 'rates', 'finance'] : ['sales'])); }
+    function can(sec) { return isStaff() && (me().role == 'admin' || sec in me().get('sections', preset(me().role))); }
 
     // logins: everyone reads their own; staff see the team; only admins change them
     match /users/{uid} {
@@ -29,11 +35,13 @@ service cloud.firestore {
     // portal content: agents see published items only
     match /offers/{id} {
       allow read: if isStaff() || (isAgent() && resource.data.published == true);
-      allow write: if can('rates');
+      allow create, update: if can('rates') && entryOk();
+      allow delete: if can('rates') && role() != 'dataentry';
     }
     match /itineraries/{id} {
       allow read: if isStaff() || (isAgent() && resource.data.published == true);
-      allow write: if can('rates');
+      allow create, update: if can('rates') && entryOk();
+      allow delete: if can('rates') && role() != 'dataentry';
     }
 
     // agents read a price-only copy of their own bookings, never the costed booking
@@ -50,7 +58,9 @@ service cloud.firestore {
 
     // photos: everyone signed in can see them (agents see offer and itinerary photos); staff upload
     match /photos/{id} { allow read: if active(); allow create: if isStaff(); allow delete: if can('rates') || can('sales'); }
-    match /dayplans/{id} { allow read: if isStaff(); allow write: if can('rates'); }
+    match /dayplans/{id} { allow read: if isStaff(); allow create, update: if can('rates') && entryOk(); allow delete: if can('rates') && role() != 'dataentry'; }
+    // agent portal prices: one copy per profit group, agents read only their own group
+    match /portalHotels/{id} { allow read: if isStaff() || (isAgent() && resource.data.tier == me().get('tier', 'A')); allow write: if active() && role() in ['admin', 'manager']; }
 
     // HR: HR staff see everyone; each person sees and files their own leave and attendance
     match /employees/{id} { allow read: if can('hr') || (isStaff() && resource.data.userId == request.auth.uid); allow write: if can('hr'); }
@@ -69,10 +79,10 @@ service cloud.firestore {
     match /files/{id} { allow read, create: if isStaff(); match /parts/{p} { allow read, create: if isStaff(); } }
 
     // internal records: staff only
-    match /bookings/{id} { allow read: if isStaff(); allow write: if can('sales') || can('operations') || can('finance'); }
-    match /quotes/{id} { allow read: if isStaff(); allow write: if can('sales'); }
+    match /bookings/{id} { allow read: if isStaff() && ownFile(); allow write: if can('sales') || can('operations') || can('finance'); }
+    match /quotes/{id} { allow read: if isStaff() && ownFile(); allow write: if can('sales'); }
     match /inquiries/{id} { allow read: if isStaff(); allow write: if can('sales'); }
-    match /rates/{id} { allow read: if isStaff(); allow write: if can('rates'); }
-    match /suppliers/{id} { allow read: if isStaff(); allow write: if can('rates') || can('operations'); }
+    match /rates/{id} { allow read: if isStaff(); allow create, update: if can('rates') && entryOk(); allow delete: if can('rates') && role() != 'dataentry'; }
+    match /suppliers/{id} { allow read: if isStaff(); allow create, update: if (can('rates') || can('operations')) && entryOk(); allow delete: if (can('rates') || can('operations')) && role() != 'dataentry'; }
   }
 }

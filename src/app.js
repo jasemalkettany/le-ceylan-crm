@@ -5,6 +5,8 @@ import { S, UI, $, esc, num, fmt, today, addDays, toast, clone, cfg, coById, age
 import { V, EDIT, ratePicker, calcText, crumbs, DEFAULT_TERMS, DEFAULT_INC, DEFAULT_EXC } from './staff.js';
 import { RATE_COLS, RATE_PAGES, accessFields, ROLE_PRESETS, SHEET_COLS, dayPicker } from './admin.js';
 import { P } from './portal.js';
+import { MORE_A, setRender, syncTiers, pendingCount, portalFooter } from './more.js';
+import { ROLES, roleName } from './core.js';
 import { buildDoc, statement, showDoc, printDoc } from './docs.js';
 import { myEmployee, leaveDays } from './hr.js';
 import { startChat, stopChat, chatView, openThread, closeThread, send, newChannel, newDM, unreadCount, chatState, drawMessages, uploadFile, downloadFile } from './chat.js';
@@ -14,7 +16,7 @@ const root = $('#root');
 const ICON = {
   dashboard: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z', quotes: 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5', bookings: 'M4 6h16v14H4zM8 3v6M16 3v6M4 11h16', agents: 'M8 11a4 4 0 100-8 4 4 0 000 8zM2 21c0-4 3-6 6-6s6 2 6 6M17 11a3 3 0 100-6M22 21c0-3-2-5-4-5.5',
   requests: 'M4 4h16v12H7l-3 3z', hotelRates: 'M3 21V8l9-5 9 5v13M9 21v-6h6v6', transportRates: 'M5 17h14M6 17V9l2-4h8l2 4v8M7 21v-2M17 21v-2', suppliers: 'M3 7h18v13H3zM8 7V4h8v3', activityRates: 'M12 3l2.5 6H21l-5 4 2 7-6-4-6 4 2-7-5-4h6.5z', guideRates: 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 21c0-4 4-6 8-6s8 2 8 6',
-  finance: 'M12 2v20M17 6H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6', itineraries: 'M5 19c3-10 11-4 14-14', offers: 'M3 12l9-9 9 9-9 9z', users: 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 21c0-4 4-6 8-6s8 2 8 6', settings: 'M12 15a3 3 0 100-6 3 3 0 000 6zM12 2v3M12 19v3M2 12h3M19 12h3',
+  finance: 'M3 7.5A2.5 2.5 0 015.5 5H18v3M3 7.5V18a2 2 0 002 2h14a1 1 0 001-1v-3M3 7.5A2.5 2.5 0 005.5 10H20v3M20 13h-4a1.5 1.5 0 000 3h4z', itineraries: 'M5 19c3-10 11-4 14-14', offers: 'M3 12l9-9 9 9-9 9z', users: 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 21c0-4 4-6 8-6s8 2 8 6', settings: 'M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4',
   home: 'M3 12l9-8 9 8M5 10v10h14V10', account: 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 21c0-4 4-6 8-6s8 2 8 6',
 };
 const ico = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${ICON[k] || ICON.dashboard}"/></svg>`;
@@ -23,15 +25,17 @@ const MODS_STAFF = [
   { k: 'dashboard', label: 'Dashboard', icon: 'dashboard', items: [['dashboard', 'Dashboard'], ['requests', 'Portal requests']] },
   { k: 'sales', label: 'Sales', icon: 'quotes', items: [['quotes', 'Quotations'], ['quote/new', 'New quotation'], ['agents', 'Travel Agents & Customers'], ['requests', 'Portal requests']] },
   { k: 'operations', label: 'Operations', icon: 'bookings', items: [['bookings', 'Bookings'], ['arrivals', 'Arrivals & departures']] },
-  { k: 'rates', label: 'Rates & supply', icon: 'hotelRates', items: [['hotelRates', 'Hotels & Rates'], ['transportRates', 'Transport & Tours'], ['activityRates', 'Activities'], ['guideRates', 'Guides'], ['suppliers', 'Suppliers'], ['dayplans', 'Day plans'], ['itineraries', 'Itineraries'], ['offers', 'Portal Offers']] },
+  { k: 'rates', label: 'Rates & supply', icon: 'hotelRates', items: [['hotelRates', 'Hotels & Rates'], ['transportRates', 'Transport & Tours'], ['activityRates', 'Activities'], ['guideRates', 'Guides'], ['suppliers', 'Suppliers'], ['dayplans', 'Day plans'], ['itineraries', 'Itineraries'], ['offers', 'Portal Offers'], ['approvals', 'Waiting approval']] },
   { k: 'finance', label: 'Finance', icon: 'finance', items: [['finance/recv', 'Invoices'], ['finance/stmt', 'Statements'], ['finance/pay', 'Supplier bills'], ['finance/pl', 'P&L & reports'], ['finance/qb', 'QuickBooks']] },
   { k: 'hr', label: 'HR', icon: 'users', items: [['employees', 'Employees'], ['leave', 'Leave'], ['attendance', 'Attendance'], ['expiries', 'Expiry alerts']] },
   { k: 'chat', label: 'Chat & tasks', icon: 'requests', items: [['chat', 'Team chat'], ['tasks', 'Tasks']] },
-  { k: 'admin', label: 'Admin', icon: 'settings', items: [['users', 'Team & Users'], ['settings', 'Settings']] },
+  { k: 'admin', label: 'Admin', icon: 'settings', items: [['users', 'Team & Users'], ['approvals', 'Approvals'], ['settings', 'Companies & settings'], ['portalset', 'Agent portal']] },
 ];
 const HR_ONLY = ['employees', 'employee', 'expiries'];
 const MODS_AGENT = [
   { k: 'home', label: 'Offers', icon: 'offers', items: [['home', 'Current offers']] },
+  { k: 'hotels', label: 'Hotels', icon: 'hotelRates', items: [['hotels', 'Hotel search']] },
+  { k: 'tours', label: 'Tours', icon: 'bookings', items: [['tours', 'Tours & transfers']] },
   { k: 'itineraries', label: 'Itineraries', icon: 'itineraries', items: [['itineraries', 'Ready-made itineraries']] },
   { k: 'requests', label: 'Requests', icon: 'requests', items: [['requests', 'My requests'], ['request/new', 'Request availability']] },
   { k: 'bookings', label: 'Bookings', icon: 'bookings', items: [['bookings', 'My bookings']] },
@@ -74,9 +78,9 @@ function shell() {
   const initials = (S.me.name || S.me.email || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   root.innerHTML = `<header class="hdr"><button class="btn s menu-btn" data-act="menu" aria-label="Menu">☰</button><div class="brand"><i>LC</i><div><b id="brandName">${isStaff() ? 'Le Ceylan' : esc(S.myAgent?.name || 'Agent portal')}</b><span>${isStaff() ? 'Destination management' : 'Powered by Le Ceylan'}</span></div></div><span class="sp"></span>
     ${isStaff() ? `<select id="coSel" aria-label="Company"></select>` : ''}<input id="q" placeholder="Search…" aria-label="Search">
-    <div class="me"><i>${esc(initials)}</i><div><b>${esc(S.me.name || S.me.email)}</b><span>${esc(isStaff() ? S.me.role[0].toUpperCase() + S.me.role.slice(1) : 'Travel agent')}</span></div><button class="link" data-act="logout">Sign out</button></div></header>
+    <div class="me"><i>${esc(initials)}</i><div><b>${esc(S.me.name || S.me.email)}</b><span>${esc(isStaff() ? roleName(S.me.role) : 'Travel agent')}</span></div><button class="link" data-act="logout">Sign out</button></div></header>
   <nav class="mods" id="mods">${mods().map(m => `<a href="#/${m.k === 'hr' && !UI.canHR ? 'leave' : m.items[0][0]}" data-mod="${m.k}">${ico(m.icon)}<span>${m.label}</span>${m.k === 'dashboard' && isStaff() ? '<em class="badge" id="reqBadge" hidden></em>' : m.k === 'chat' ? '<em class="badge" id="chatBadge" hidden></em>' : ''}</a>`).join('')}</nav>
-  <div class="body"><aside class="sub" id="sub"></aside><main id="main"><div class="empty">Opening the register…</div></main></div>`;
+  <div class="body"><aside class="sub" id="sub"></aside><main id="main"><div class="empty">Opening the register…</div></main></div>${isStaff() ? '' : '<footer class="pfoot" id="pfoot"></footer>'}`;
   $('#q').addEventListener('input', () => { if (!UI.edit) render(); });
   $('#coSel')?.addEventListener('change', e => { try { localStorage.setItem('lc_co', e.target.value); } catch (x) { } render(); });
 }
@@ -116,7 +120,7 @@ function blank(kind) {
 function badges() { const c = $('#chatBadge'); if (c) { const n = unreadCount() + myOpenTasks(); c.hidden = !n; c.textContent = n; } }
 function onChat() { badges(); if (current.name !== 'chat') return; const list = $('.chlist'); if (!list) { render(); return; } const tmp = document.createElement('div'); tmp.innerHTML = chatView(current.id); list.replaceWith(tmp.querySelector('.chlist')); const t1 = $('.chtitle'), t2 = tmp.querySelector('.chtitle'); if (t1 && t2) t1.innerHTML = t2.innerHTML; }
 function onData() {
-  fillCo();
+  fillCo(); syncTiers(); document.body.dataset.role = S.me?.role || '';
   badges();
   const b = $('#reqBadge'); if (b) { const n = S.requests.filter(r => (r.status || 'New request') === 'New request').length; b.hidden = !n; b.textContent = n; }
   if (UI.edit?.waiting) { const r = S[UI.edit.col].find(x => x.id === UI.edit.waiting); if (r) { startEdit(); render(); } return; }
@@ -127,8 +131,9 @@ function onData() {
 }
 const EDIT_TITLE = { employee: 'Employees', dayplan: 'Day plans', quote: 'Quotations', booking: 'Bookings', agent: 'Travel Agents & Customers', supplier: 'Suppliers', rate: 'Rates', itinerary: 'Itineraries', offer: 'Portal Offers', request: 'Portal requests' };
 function setCrumbs(t) { const c = $('#crumbs'); if (c) c.innerHTML = `<span>Workspace</span><span class="sep">›</span><b>${esc(t)}</b>`; document.title = t + ' · Le Ceylan'; }
+setRender(() => render());
 function render() {
-  const m = $('#main'); if (!m) return; const { name, id, params } = current;
+  const m = $('#main'); if (!m) return; document.body.dataset.role = S.me?.role || ''; const pf = $('#pfoot'); if (pf) pf.innerHTML = portalFooter(); const { name, id, params } = current;
   const navKey = EDIT_NAV[name] || (name === 'rate' ? UI.ratePage || 'hotelRates' : name === 'finance' ? 'finance/' + (id || 'recv') : name === 'request' && !isStaff() ? 'request/new' : name);
   drawNav(navKey);
   const modOk = canSee(ROUTE_MOD(navKey).k);
@@ -213,8 +218,8 @@ async function importRates() {
   try {
     for (const r of rows) {
       const k = r.supplier.toLowerCase(); let sid = supByName.get(k);
-      if (!sid) { const ref = doc(collection(db, 'suppliers')); sid = ref.id; supByName.set(k, sid); batch.set(ref, { name: r.supplier, type: r.type === 'Hotel' ? 'Hotel' : r.type === 'Transfer' ? 'Transport' : r.type === 'Guide' ? 'Guide' : 'Activity', destination: r.destination, city: r.city, currency: r.currency, createdAt: now, updatedAt: now, createdBy: S.user.uid }); n++; }
-      batch.set(doc(collection(db, 'rates')), { ...r, supplierId: sid, createdAt: now, updatedAt: now, createdBy: S.user.uid }); n++;
+      if (!sid) { const ref = doc(collection(db, 'suppliers')); sid = ref.id; supByName.set(k, sid); batch.set(ref, { name: r.supplier, type: r.type === 'Hotel' ? 'Hotel' : r.type === 'Transfer' ? 'Transport' : r.type === 'Guide' ? 'Guide' : 'Activity', destination: r.destination, city: r.city, currency: r.currency, ...(S.me.role === 'dataentry' ? { approved: false, published: false } : {}), createdAt: now, updatedAt: now, createdBy: S.user.uid }); n++; }
+      batch.set(doc(collection(db, 'rates')), { ...r, supplierId: sid, ...(S.me.role === 'dataentry' ? { approved: false, published: false } : {}), createdAt: now, updatedAt: now, createdBy: S.user.uid }); n++;
       if (n >= 400) await commit();
     }
     await commit(); toast(`${rows.length} rates imported`); UI.pendingRates = null; render();
@@ -256,7 +261,7 @@ async function readSheet(file, kind) {
 }
 async function importSheet() {
   const p = UI.pendingSheet; if (!p?.out.length) return; const now = new Date().toISOString(); let batch = writeBatch(db), n = 0;
-  try { for (const x of p.out) { batch.set(doc(collection(db, p.kind)), { ...x, createdAt: now, updatedAt: now, createdBy: S.user.uid }); if (++n >= 400) { await batch.commit(); batch = writeBatch(db); n = 0; } } if (n) await batch.commit(); toast(`${p.out.length} ${p.kind} imported`); UI.pendingSheet = null; render(); }
+  try { for (const x of p.out) { batch.set(doc(collection(db, p.kind)), { ...x, ...(S.me.role === 'dataentry' ? { approved: false, published: false } : {}), createdAt: now, updatedAt: now, createdBy: S.user.uid }); if (++n >= 400) { await batch.commit(); batch = writeBatch(db); n = 0; } } if (n) await batch.commit(); toast(`${p.out.length} ${p.kind} imported`); UI.pendingSheet = null; render(); }
   catch (e) { console.error(e); toast('Import stopped: ' + (e.code || e.message)); }
 }
 
@@ -311,7 +316,8 @@ function readAccess(box, role) {
 }
 
 /* ---------- actions ---------- */
-const A = {
+const A = MORE_A;
+Object.assign(A, {
   menu() { $('#sub').classList.toggle('open'); },
   logout() { signOut(auth); location.hash = ''; },
   async forgot() { const em = document.querySelector('#loginForm [name=email]').value.trim(); if (!em) { $('#loginErr').textContent = 'Type your email first.'; return; } try { await sendPasswordResetEmail(auth, em); } catch (e) { } $('#loginErr').textContent = 'If that email has a login, a reset link is on its way.'; },
@@ -352,7 +358,7 @@ const A = {
     const item = { hotels: { name: '', category: 'Standard', meal: 'BB', checkIn: q.arrival || '', checkOut: q.departure || '', currency: 'USD', dest: (q.destinations || [])[0] || 'Sri Lanka', rooms: {} }, activities: { date: q.arrival || '', name: '', per: 'person', pax: pax || 1, price: '', currency: 'USD' }, misc: { date: '', desc: '', qty: 1, price: '', currency: cur }, payments: { date: today(), amount: '', method: 'Bank transfer', ref: '' } }[k];
     (q[k] = q[k] || []).push(item); markDirty(); render(); },
   rmItem(i, el) { UI.edit.rec[el.dataset.k].splice(+i, 1); markDirty(); render(); },
-  addTransport(dest) { const q = UI.edit.rec; const saved = S.rates.filter(x => ['Transfer', 'Tour'].includes(x.type) && (!x.destination || x.destination === dest));
+  addTransport(dest) { const q = UI.edit.rec; const saved = S.rates.filter(x => x.approved !== false && ['Transfer', 'Tour'].includes(x.type) && (!x.destination || x.destination === dest));
     openModal('Add transport — ' + dest, `<div class="grid" style="grid-template-columns:1fr"><label>Pricing method<select id="trMethod"><option value="mileage">Mileage — per km or day</option><option value="fixed">Fixed-price transfer or tour</option><option value="package">Resort package — per person</option></select></label>
       <label>Route / saved rate<select id="trRate"><option value="">Custom (enter manually)</option>${saved.map(x => `<option value="${esc(x.id)}">${esc(x.supplier)} · ${esc(x.service)} · ${esc(fmt(x.cost, x.currency))} ${esc(x.unit || '')}</option>`).join('')}</select></label>
       <p class="note">A saved rate fills the line. Everything stays editable on this costing only.</p><div class="row"><span class="sp"></span><button class="btn" data-act="closeModal">Cancel</button><button class="btn p" data-act="confirmTransport" data-id="${esc(dest)}">Add line</button></div></div>`); },
@@ -396,7 +402,7 @@ const A = {
   async saveRequest() { if (await save('requests', UI.edit.rec)) location.hash = '#/requests'; },
   reqToQuote() { location.hash = '#/quote/new?req=' + UI.edit.rec.id; },
   editAccess(id) { const u = S.users.find(x => x.id === id); if (!u) return;
-    openModal('Access — ' + (u.name || u.email), `<div style="display:grid;gap:14px"><label style="max-width:240px">Role<select id="roleEdit">${[['staff', 'Staff'], ['manager', 'Manager'], ['admin', 'Admin']].map(([v, l]) => `<option value="${v}" ${u.role === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><div id="accessEdit">${accessFields(u)}</div>
+    openModal('Access — ' + (u.name || u.email), `<div style="display:grid;gap:14px"><label style="max-width:240px">Role<select id="roleEdit">${ROLES.map(([v, l]) => `<option value="${v}" ${u.role === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><div id="accessEdit">${accessFields(u)}</div>
       <div class="row"><span class="sp"></span><button class="btn" data-act="closeModal">Cancel</button><button class="btn p" data-act="saveAccess" data-id="${esc(id)}">Save access</button></div></div>`); },
   async saveAccess(id) { const u = S.users.find(x => x.id === id); if (!u) return; const role = $('#roleEdit').value; const acc = readAccess($('#mbody'), role);
     if (!acc.companies.length && ![...$('#mbody').querySelectorAll('input[name=co]:checked')].length) { toast('Tick at least one company'); return; }
@@ -406,12 +412,12 @@ const A = {
   addCo() { collectSettings(); S.settings.companies.push({ id: 'co' + Date.now().toString(36), name: '', currency: 'AED' }); render(); },
   rmCo(i, btn) { if (!confirmBtn(btn, 'Click again to remove')) return; collectSettings(); S.settings.companies.splice(+i, 1); render(); },
   async saveSettings() { collectSettings(); try { await setDoc(doc(db, 'settings', 'main'), clone(S.settings)); toast('Settings saved'); } catch (e) { toast('Could not save: ' + (e.code || '')); } },
-};
+});
 function collectSettings() {
   if (!S.settings) S.settings = { companies: [], fx: { AED: 1, USD: 3.6725 }, markup: 15 };
   document.querySelectorAll('[data-co]').forEach(el => { const c = S.settings.companies[+el.dataset.co]; if (c) c[el.dataset.k] = el.value; });
   S.settings.fx = S.settings.fx || {}; document.querySelectorAll('.fxin').forEach(el => { if (el.value !== '') S.settings.fx[el.dataset.cur] = num(el.value); else delete S.settings.fx[el.dataset.cur]; });
-  const m = $('#dMarkup'); if (m) S.settings.markup = num(m.value); const fd = $('#fxDate'); if (fd) S.settings.fxDate = fd.value;
+  const m = $('#dMarkup'); if (m) S.settings.markup = num(m.value); const im = $('#iMarkup'); if (im) S.settings.interMarkup = num(im.value); const fd = $('#fxDate'); if (fd) S.settings.fxDate = fd.value; const gc = $('#gClient'); if (gc) S.settings.googleClientId = gc.value.trim();
 }
 document.addEventListener('click', e => {
   if (e.target.id === 'modal') { closeModal(); return; }

@@ -216,3 +216,20 @@ input.sm,td.sm input{max-width:80px}input.md,td.md input{max-width:120px}.rooms 
 .chip{display:inline-flex;gap:6px;align-items:center;background:var(--indigo2);color:var(--indigo);border-radius:99px;padding:3px 10px;font-size:12px}
 .chip button{border:0;background:none;cursor:pointer;color:var(--indigo)}
 @media(max-width:900px){.chat{grid-template-columns:1fr}.chlist{max-height:240px}}
+
+/* agent hotel search */
+.hlayout{display:grid;grid-template-columns:240px 1fr;gap:16px;align-items:start}
+.hfilter{display:grid;gap:10px;position:sticky;top:12px}
+.hres{display:grid;grid-template-columns:230px 1fr;gap:0;padding:0;overflow:hidden}
+.hres .hph{background:var(--indigo2);min-height:170px}
+.hres .hbd{padding:16px 18px}
+@media(max-width:820px){.hlayout{grid-template-columns:1fr}.hfilter{position:static}.hres{grid-template-columns:1fr}.hres .hph{height:180px}}
+body[data-role=dataentry] [data-act^=publish],body[data-role=dataentry] [data-act=delRates],body[data-role=dataentry] [data-act=delRec]{display:none}
+
+/* agent portal footer */
+.pfoot{background:#1F3F5B;color:#D6E4F0;margin-top:30px}
+.pf-in{max-width:1200px;margin:0 auto;padding:28px 22px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:22px}
+.pf-h{display:block;color:#fff;font-weight:600;margin-bottom:8px}
+.pf-t{font-size:13px;line-height:1.6}.pf-t a,.pf-soc a{color:#D6E4F0;text-decoration:none}.pf-t a:hover,.pf-soc a:hover{color:#fff}
+.pf-soc{display:flex;gap:10px}.pf-soc a{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.1)}.pf-soc a:hover{background:var(--indigo)}
+.pf-bot{border-top:1px solid rgba(255,255,255,.12);text-align:center;font-size:12px;padding:12px;color:#A9C1D6}

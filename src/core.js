@@ -13,7 +13,10 @@ export const LINE_TYPES = ['Hotel', 'Transfer', 'Tour', 'Activity', 'Guide', 'Me
 export const MEALS = ['RO', 'BB', 'HB', 'FB', 'AI'];
 export const DEST = ['Sri Lanka', 'Maldives', 'Bali', 'Indonesia', 'Thailand', 'Malaysia', 'UAE', 'Turkey', 'Lebanon', 'Philippines'];
 export const CURS = ['AED', 'USD', 'EUR', 'IDR', 'LKR', 'MVR', 'THB', 'MYR', 'SAR', 'PHP'];
-export const STAFF_ROLES = ['admin', 'manager', 'staff'];
+export const STAFF_ROLES = ['admin', 'manager', 'salesmgr', 'salesexec', 'operations', 'accountant', 'dataentry', 'staff'];
+export const ROLES = [['admin', 'Admin'], ['manager', 'Manager'], ['salesmgr', 'Sales Manager'], ['salesexec', 'Sales Executive'], ['operations', 'Operations'], ['accountant', 'Accountant'], ['dataentry', 'Data Entry']];
+export const roleName = r => (ROLES.find(x => x[0] === r) || [r, r === 'staff' ? 'Staff' : r])[1];
+export const APPROVAL_COLS = ['rates', 'offers', 'itineraries', 'dayplans', 'suppliers'];
 
 export const S = {
   user: null, me: null, settings: null, loaded: {},
@@ -124,7 +127,8 @@ export function startData(onData) {
   stopAll();
   unsubs.push(onSnapshot(doc(db, 'settings', 'main'), s => { S.settings = s.exists() ? s.data() : null; S.loaded.settings = true; onData(); }, e => { S.loaded.settings = true; onData(); }));
   if (isStaff()) {
-    for (const c of ['agents', 'suppliers', 'rates', 'itineraries', 'offers', 'dayplans', 'inquiries', 'quotes', 'bookings', 'requests', 'users', 'tasks']) sub(c, collection(db, c), onData);
+    const own = S.me.role === 'salesexec';
+    for (const c of ['agents', 'suppliers', 'rates', 'itineraries', 'offers', 'dayplans', 'inquiries', 'quotes', 'bookings', 'requests', 'users', 'tasks']) sub(c, own && ['quotes', 'bookings'].includes(c) ? query(collection(db, c), where('createdBy', '==', S.user.uid)) : collection(db, c), onData);
     UI.canHR = S.me.role === 'admin' || (S.me.sections || []).includes('hr');
     for (const c of ['employees', 'leaves', 'attendance']) sub(c, UI.canHR ? collection(db, c) : query(collection(db, c), where('userId', '==', S.user.uid)), onData);
   } else if (S.me?.role === 'agent' && S.me.agentId) {
@@ -134,12 +138,14 @@ export function startData(onData) {
     sub('itineraries', query(collection(db, 'itineraries'), where('published', '==', true)), onData);
     sub('bookings', query(collection(db, 'portalBookings'), where('agent', '==', aid)), onData);
     sub('requests', query(collection(db, 'requests'), where('agentId', '==', aid)), onData);
+    sub('portal', query(collection(db, 'portalHotels'), where('tier', '==', S.me.tier || 'A')), onData);
   }
 }
 
 export async function save(col, rec, { silent } = {}) {
   const { id, ...data } = rec;
   const now = new Date().toISOString();
+  if (S.me?.role === 'dataentry' && APPROVAL_COLS.includes(col)) { data.approved = false; data.published = false; }
   data.updatedAt = now; if (!data.createdAt) data.createdAt = now; if (!data.createdBy) data.createdBy = S.user?.uid || '';
   const ref = id ? doc(db, col, id) : doc(collection(db, col));
   try { await setDoc(ref, clone(data)); if (!silent) toast('Saved'); return ref.id; }

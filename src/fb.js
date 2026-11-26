@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, createUserWithEmailAndPassword } from 'firebase/auth';
-import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, orderBy, limit, writeBatch, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, orderBy, limit, writeBatch, runTransaction, serverTimestamp, getDocs } from 'firebase/firestore';
 
 // Public web config (not a secret). Access is controlled by Firestore security rules.
 export const firebaseConfig = {
@@ -28,4 +28,4 @@ export async function createLogin(email, password) {
 }
 
 export { onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail,
-  collection, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, orderBy, limit, writeBatch, runTransaction, serverTimestamp };
+  collection, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, orderBy, limit, writeBatch, runTransaction, serverTimestamp, getDocs };
