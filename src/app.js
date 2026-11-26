@@ -20,10 +20,9 @@ const EDIT_COL = { inquiry: 'inquiries', quote: 'quotes', booking: 'bookings', a
 
 /* ---------- auth ---------- */
 function loginView(msg = '') {
-  root.innerHTML = `<div class="login"><div class="login-art"><div class="brandmark"><i>LC</i>Le Ceylan</div>${routeArt(700, 420)}<div style="position:relative"><h1>Every trip, from first inquiry to final invoice.</h1><p>Sign in to your workspace. Travel agents use the login their Le Ceylan account manager sent them.</p></div></div>
-  <div class="login-form"><form id="loginForm"><h2>Welcome back</h2><p class="note" style="margin:0">Sign in to continue.</p>
+  root.innerHTML = `<div class="login"><form id="loginForm"><div class="logo">Le Ceylan</div><h2>Sign in</h2>
   <label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label>
-  <div class="err" id="loginErr">${esc(msg)}</div><button class="btn p" type="submit" style="justify-content:center">Sign in</button><button class="btn" type="button" data-act="forgot" style="justify-content:center">Forgot password?</button></form></div></div>`;
+  <div class="err" id="loginErr">${esc(msg)}</div><button class="btn p" type="submit" style="justify-content:center">Sign in</button><button class="btn" type="button" data-act="forgot" style="justify-content:center;border:0">Forgot password?</button></form></div>`;
 }
 onAuthStateChanged(auth, async user => {
   stopAll(); S.user = user; S.me = null; UI.edit = null;
@@ -42,7 +41,7 @@ onAuthStateChanged(auth, async user => {
 /* ---------- shell and routing ---------- */
 function shell() {
   const nav = isStaff() ? STAFF_NAV : AGENT_NAV;
-  root.innerHTML = `<div class="shell"><nav class="side" id="side"><div class="brandmark"><i>LC</i>${isStaff() ? 'Le Ceylan' : esc(S.myAgent?.name || 'Agent portal')}</div>
+  root.innerHTML = `<div class="shell"><nav class="side" id="side"><div class="logo">${isStaff() ? 'Le Ceylan' : esc(S.myAgent?.name || 'Agent portal')}</div>
   ${nav.map(([g, items]) => `<h4>${g}</h4>` + items.filter(([k]) => !(k === 'settings' && !isAdmin())).map(([k, l]) => `<a href="#/${k}" data-nav="${k}">${ico(k)}<span>${l}</span>${k === 'requests' && isStaff() ? '<span class="badge" id="reqBadge" hidden></span>' : ''}</a>`).join('')).join('')}
   <div class="me"><b>${esc(S.me.name || S.me.email)}</b>${esc(isStaff() ? S.me.role : 'Travel agent')}<br><button data-act="logout">Sign out</button></div></nav>
   <div><div class="top"><button class="btn s menu-btn" data-act="menu" aria-label="Menu">☰</button><h1 id="title"></h1>${isStaff() ? `<select id="coSel" style="width:auto;min-width:190px" aria-label="Company"></select>` : ''}<input id="q" placeholder="Search…" style="width:200px" aria-label="Search"></div><main id="main"><div class="empty">Loading…</div></main></div></div>`;
@@ -76,7 +75,7 @@ function onData() {
   const b = $('#reqBadge'); if (b) { const n = S.requests.filter(r => (r.status || 'New request') === 'New request').length; b.hidden = !n; b.textContent = n; }
   if (UI.edit?.waiting) { const r = S[UI.edit.col].find(x => x.id === UI.edit.waiting); if (r) { startEdit(); render(); } return; }
   if (UI.edit) return; // never re-render under someone typing
-  if (!isStaff()) { const bm = document.querySelector('.side .brandmark'); if (bm && S.myAgent) bm.innerHTML = `<i>LC</i>${esc(S.myAgent.name)}`; }
+  if (!isStaff()) { const bm = document.querySelector('.side .logo'); if (bm && S.myAgent) bm.textContent = S.myAgent.name; }
   render();
 }
 function render() {
