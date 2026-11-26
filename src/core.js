@@ -37,30 +37,51 @@ export const search = () => ($('#q')?.value || '').trim().toLowerCase();
 export const qMatch = r => { const q = search(); if (!q) return true; return JSON.stringify(r).toLowerCase().includes(q) || agentName(r.agent).toLowerCase().includes(q); };
 
 export function tagFor(s) {
-  const ok = ['Confirmed', 'Accepted', 'Completed', 'Paid', 'Published', 'Active', 'Done'];
+  const ok = ['Confirmed', 'Accepted', 'Booked', 'Completed', 'Paid', 'Published', 'Active', 'Done', 'On tour'];
   const bad = ['Lost', 'Rejected', 'Cancelled', 'Overdue', 'Suspended', 'Declined'];
-  const acc = ['Sent', 'Quoted', 'In progress', 'Part paid', 'Working', 'New request', 'Pending'];
+  const acc = ['Sent', 'Quoted', 'In progress', 'Under process', 'Part paid', 'Working', 'New request', 'Pending', 'Awaiting approval'];
   const gr = ['Draft', 'Expired', 'Unpaid'];
   const c = ok.includes(s) ? 'ok' : bad.includes(s) ? 'bad' : acc.includes(s) ? 'acc' : gr.includes(s) ? 'gr' : '';
   return `<span class="tag ${c}">${esc(s || 'New')}</span>`;
 }
 
-/* money */
-export function lineCalc(l, qc) {
-  const units = num(l.qty || 1) * Math.max(1, num(l.units || 1));
-  const costLocal = units * num(l.unitCost);
-  const cost = fx(costLocal, l.costCur || qc, qc);
-  const so = l.sellOverride;
-  const sell = so !== '' && so != null ? num(so) : cost * (1 + num(l.markup) / 100);
-  return { cost, sell, costLocal };
+/* money — a costing has four sections, each line in its own currency */
+export const ROOM_TYPES = [['SGL', 'Single', 1], ['DBL', 'Double', 2], ['TPL', 'Triple', 3], ['QUAD', 'Quad', 4], ['CWB', 'Child w/ bed', 1], ['CNB', 'Child no bed', 1], ['GUIDE', 'Guide room', 0]];
+export const nightsBetween = (a, b) => (a && b) ? Math.max(0, Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 864e5)) : 0;
+export function hotelNet(h) { const n = nightsBetween(h.checkIn, h.checkOut); return ROOM_TYPES.reduce((s, [k]) => s + num(h.rooms?.[k]?.n) * num(h.rooms?.[k]?.rate) * n, 0); }
+export function hotelPax(h) { return ROOM_TYPES.reduce((s, [k, , occ]) => s + num(h.rooms?.[k]?.n) * occ, 0); }
+export function transportNet(t) { if (t.method === 'fixed') return num(t.qty || 1) * num(t.price); if (t.method === 'package') return num(t.pax) * num(t.price); return num(t.km) * num(t.perKm) + num(t.days) * num(t.perDay) + num(t.extras); }
+export const activityNet = a => (a.per === 'group' ? 1 : num(a.pax)) * num(a.price) * Math.max(1, num(a.qty || 1));
+export const miscNet = m => num(m.qty || 1) * num(m.price);
+export function rateTo(cur, q) { const sc = q.currency || 'AED'; if (!cur || cur === sc) return 1; const own = num(q.fx?.[cur]); if (own) return own; const r = cfg().fx || {}; const a = num(r[cur]), b = num(r[sc]); return a && b ? a / b : NaN; }
+export const SECTIONS = [['hotels', 'Hotels', hotelNet], ['transport', 'Transport & tours', transportNet], ['activities', 'Activities & entrance fees', activityNet], ['misc', 'Miscellaneous', miscNet]];
+export function totals(q) {
+  if (q.sellTotal != null) { const pax = Math.max(1, num(q.adults) + num(q.children)); return { net: 0, sell: num(q.sellTotal), profit: 0, perPax: num(q.sellTotal) / pax, bySec: {}, bad: false }; }
+  let net = 0, bad = false; const bySec = {};
+  for (const [k, , fn] of SECTIONS) {
+    let s = 0; const off = (k === 'hotels' && q.hotelsIncluded === false) || (k === 'transport' && q.transportIncluded === false);
+    if (!off) for (const it of q[k] || []) { const v = fn(it) * rateTo(it.currency || q.currency, q); if (isNaN(v)) bad = true; else s += v; }
+    bySec[k] = s; net += s;
+  }
+  const pax = Math.max(1, num(q.adults) + num(q.children));
+  const m = num(q.markup ?? 15);
+  const profit = q.markupMethod === 'fixed' ? m : q.markupMethod === 'pp' ? m * pax : net * m / 100;
+  const discount = (net + profit) * num(q.discountPct) / 100;
+  const sell = net + profit - discount;
+  return { net, profit, discount, sell, perPax: sell / pax, margin: sell ? (sell - net) / sell * 100 : 0, cost: net, bySec, bad };
 }
-export function totals(rec) {
-  const qc = rec.currency || 'AED'; let cost = 0, sell = 0, bad = false;
-  for (const l of rec.lines || []) { const c = lineCalc(l, qc); if (isNaN(c.cost)) bad = true; else { cost += c.cost; sell += c.sell; } }
-  sell -= num(rec.discount);
-  const pax = Math.max(1, num(rec.adults) + num(rec.children));
-  return { cost, sell, profit: sell - cost, margin: sell ? (sell - cost) / sell * 100 : 0, perPax: sell / pax, bad };
+// every costing line as one flat list, with its share of the selling price
+export function flatLines(q) {
+  if (q.flat) return q.flat;
+  const t = totals(q); const ratio = t.net ? t.sell / t.net : 1; const out = [];
+  const push = (sec, idx, it, type, date, desc, netLocal) => { const net = netLocal * rateTo(it.currency || q.currency, q); out.push({ sec, idx, type, date: date || '', desc, supplier: it.supplierId || '', supplierName: it.supplierName || it.name || '', meal: it.meal || '', conf: it.conf || '', paid: num(it.paid), currency: it.currency || q.currency, netLocal, net, sell: isNaN(net) ? 0 : net * ratio }); };
+  if (q.hotelsIncluded !== false) (q.hotels || []).forEach((h, i) => { const n = nightsBetween(h.checkIn, h.checkOut); const rooms = ROOM_TYPES.filter(([k]) => num(h.rooms?.[k]?.n)).map(([k]) => num(h.rooms[k].n) + ' ' + k).join(', '); push('hotels', i, h, 'Hotel', h.checkIn, `${h.name || 'Hotel'}${h.category ? ' · ' + h.category : ''} · ${rooms || 'rooms'} · ${n} night${n === 1 ? '' : 's'}${h.meal ? ' · ' + h.meal : ''}`, hotelNet(h)); });
+  if (q.transportIncluded !== false) (q.transport || []).forEach((t, i) => push('transport', i, t, t.method === 'package' ? 'Package' : 'Transport', t.date, t.desc || t.vehicle || 'Transport', transportNet(t)));
+  (q.activities || []).forEach((a, i) => push('activities', i, a, 'Activity', a.date, a.name || 'Activity', activityNet(a)));
+  (q.misc || []).forEach((m, i) => push('misc', i, m, 'Other', m.date, m.desc || 'Service', miscNet(m)));
+  return out;
 }
+export const lineCalc = (l) => ({ cost: l.net, sell: l.sell, costLocal: l.netLocal });
 export const received = b => (b.payments || []).reduce((s, p) => s + num(p.amount), 0);
 
 /* data */
@@ -98,21 +119,21 @@ export async function save(col, rec, { silent } = {}) {
 export async function savePortalCopy(b) {
   if (!b.id) return;
   const qc = b.currency || 'AED';
-  const copy = { agent: b.agent, company: b.company, no: b.no, invoiceNo: b.invoiceNo || '', invoiceDate: b.invoiceDate || '', dueDate: b.dueDate || '', status: b.status || '', currency: qc,
+  const t = totals(b);
+  const copy = { sellTotal: +t.sell.toFixed(2), flat: flatLines(b).map(l => ({ type: l.type, date: l.date, desc: l.desc, meal: l.meal, conf: l.conf, supplierName: supName(l.supplier, l), sell: +(l.sell || 0).toFixed(2) })), agent: b.agent, company: b.company, no: b.no, invoiceNo: b.invoiceNo || '', invoiceDate: b.invoiceDate || '', dueDate: b.dueDate || '', status: b.status || '', currency: qc,
     lead: b.lead || '', adults: b.adults || 0, children: b.children || 0, nationality: b.nationality || '', arrival: b.arrival || '', departure: b.departure || '', agentRef: b.agentRef || '',
     flightIn: b.flightIn || '', flightOut: b.flightOut || '', rooming: b.rooming || '', itinerary: b.itinerary || '', inclusions: b.inclusions || '', exclusions: b.exclusions || '', discount: b.discount || 0,
     payments: (b.payments || []).map(p => ({ date: p.date || '', amount: num(p.amount) })),
-    lines: (b.lines || []).map(l => ({ type: l.type, date: l.date || '', desc: l.desc || '', meal: l.meal || '', qty: l.qty || 1, units: l.units || 1, conf: l.conf || '', supplierName: supName(l.supplier), unitCost: 0, sellOverride: +(lineCalc(l, qc).sell || 0).toFixed(2) })),
     updatedAt: new Date().toISOString() };
   try { await setDoc(doc(db, 'portalBookings', b.id), copy); } catch (e) { console.error('portal copy', e); }
 }
 export async function remove(col, id) { try { await deleteDoc(doc(db, col, id)); toast('Deleted'); return true; } catch (e) { toast('Could not delete: ' + (e.code || '')); return false; } }
 
-export async function nextNo(key, prefix) {
+export async function nextNo(key, prefix, base = 0) {
   const ref = doc(db, 'settings', 'counters');
   try {
     const n = await runTransaction(db, async tx => { const s = await tx.get(ref); const cur = num(s.exists() ? s.data()[key] : 0) + 1; tx.set(ref, { [key]: cur }, { merge: true }); return cur; });
-    return prefix + String(n).padStart(4, '0');
+    return prefix + String(n + base).padStart(4, '0');
   } catch (e) { console.error(e); return prefix + Date.now().toString().slice(-6); }
 }
 

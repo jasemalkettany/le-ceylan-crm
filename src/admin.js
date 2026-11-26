@@ -5,23 +5,29 @@ const go = h => `href="#/${h}"`;
 export const RATE_COLS = ['Type', 'Destination', 'City', 'Supplier', 'Service', 'Meal', 'Valid from', 'Valid to', 'Cost', 'Currency', 'Unit', 'Notes'];
 export const UNITS = ['per room per night', 'per person', 'per person per night', 'per car', 'per car per day', 'per day', 'per group', 'per trip'];
 
-/* ---------- rates ---------- */
-V.rates = { title: 'Rates', render() {
-  const f = UI.filter; let r = S.rates.filter(qMatch);
+/* ---------- rates & supply: one page per kind, same upload everywhere ---------- */
+export const RATE_PAGES = {
+  hotelRates: ['Hotels & Rates', 'Find the perfect stay', 'Your contracted hotels by country, city and validity. Every selected rate is copied into the quotation.', ['Hotel']],
+  transportRates: ['Transport & Tours', 'Transport & tours', 'Routes, transfers and tour prices per country.', ['Transfer', 'Tour']],
+  activityRates: ['Activities', 'Activities', 'Experiences, entrance fees and meals, ready for every trip.', ['Activity', 'Entrance', 'Meals', 'Other']],
+  guideRates: ['Guides', 'Guides', 'Local guides by destination and language. Rates are saved per guide.', ['Guide']],
+};
+for (const [key, [title, head, lead, types]] of Object.entries(RATE_PAGES)) V[key] = { title, render() {
+  UI.rateTypes = types; UI.ratePage = key;
+  const f = UI.filter; let r = S.rates.filter(x => types.includes(x.type)).filter(qMatch);
   if (f.rdest) r = r.filter(x => x.destination === f.rdest);
-  if (f.rtype) r = r.filter(x => x.type === f.rtype);
   r.sort((a, b) => (a.destination || '').localeCompare(b.destination || '') || (a.supplier || '').localeCompare(b.supplier || '') || (a.service || '').localeCompare(b.service || ''));
   const shown = r.slice(0, 400);
-  return `<div class="card"><h2>Upload rates from Excel <span class="sub">hotels, transfers, tours, activities, guides</span></h2>
-    <div class="drop" id="drop"><p style="margin:0 0 8px"><b>Drop an Excel or CSV file here</b>, or</p><label class="btn a" style="display:inline-flex">Choose file<input type="file" id="rateFile" accept=".xlsx,.xls,.csv" hidden></label>
-    <p class="note" style="margin:10px 0 0">Columns: ${RATE_COLS.join(', ')}. <a href="#" data-act="rateTemplate">Download the template</a>.</p></div>
+  return `<div class="pagehead"><div><h1>${esc(head)}</h1><p class="lead">${esc(lead)}</p></div><div class="row"><a class="btn" ${go('rate/new')}>+ Add one</a></div></div>
+  <div class="card"><h2>Upload from Excel <span class="sub">or CSV · <a href="#" data-act="rateTemplate">download the template</a></span></h2>
+    <div class="drop" id="drop"><b>Drop the file here</b> or <label class="link" style="display:inline;cursor:pointer;color:var(--blue)">choose a file<input type="file" id="rateFile" accept=".xlsx,.xls,.csv" hidden></label><div class="note" style="margin-top:6px">Columns: ${RATE_COLS.join(', ')}</div></div>
     <div id="ratePreview"></div></div>
-  <div class="row" style="margin-bottom:12px">${sel('rdest', [['', 'All destinations'], ...DEST], f.rdest, 'data-filter="rdest" style="width:auto"')}${sel('rtype', [['', 'All types'], ...LINE_TYPES], f.rtype, 'data-filter="rtype" style="width:auto"')}<span class="sp"></span><a class="btn" ${go('rate/new')}>Add one rate</a>${isAdmin() && r.length ? `<button class="btn d" data-act="delRates">Delete these ${r.length}</button>` : ''}</div>
-  <div class="card">${table(['Type', 'Destination', 'Supplier', 'Service', 'Meal', 'Valid', 'Cost ', 'Unit'], shown.map(x => `<tr class="click" data-go="rate/${esc(x.id)}"><td>${esc(x.type)}</td><td>${esc(x.destination)}<div class="note">${esc(x.city)}</div></td><td><b>${esc(x.supplier)}</b></td><td>${esc(x.service)}</td><td>${esc(x.meal)}</td><td>${esc(x.validFrom)} → ${esc(x.validTo)}${x.validTo && x.validTo < today() ? ' ' + tagFor('Expired') : ''}</td><td class="num">${esc(fmt(x.cost, x.currency))}</td><td class="note">${esc(x.unit)}</td></tr>`), 'No rates yet. Upload your rate sheet above.')}${r.length > shown.length ? `<p class="note">Showing ${shown.length} of ${r.length}. Use the filters or search to narrow.</p>` : ''}</div>`;
+  <div class="card"><div class="row" style="margin-bottom:10px">${sel('rdest', [['', 'All destinations'], ...DEST], f.rdest, 'data-filter="rdest" style="width:auto"')}<span class="note">${r.length} ${r.length === 1 ? 'rate' : 'rates'}</span><span class="sp"></span>${isAdmin() && r.length ? `<button class="btn d s" data-act="delRates">Delete these ${r.length}</button>` : ''}</div>
+  ${table(['Destination', 'Supplier', 'Service', 'Meal', 'Valid', 'Cost ', 'Unit'], shown.map(x => `<tr class="click" data-go="rate/${esc(x.id)}"><td>${esc(x.destination)}<div class="note">${esc(x.city)}</div></td><td><b>${esc(x.supplier)}</b></td><td>${esc(x.service)}${types.length > 1 ? ` <span class="note">${esc(x.type)}</span>` : ''}</td><td>${esc(x.meal)}</td><td>${esc(x.validFrom)} → ${esc(x.validTo)}${x.validTo && x.validTo < today() ? ' ' + tagFor('Expired') : ''}</td><td class="num">${esc(fmt(x.cost, x.currency))}</td><td class="note">${esc(x.unit)}</td></tr>`), 'Nothing saved yet. Upload your rate sheet above.')}${r.length > shown.length ? `<p class="note">Showing ${shown.length} of ${r.length}. Use the filter or search to narrow.</p>` : ''}</div>`;
 } };
 EDIT.rate = r => `<div class="card"><h2>${esc(r.service || 'New rate')}</h2><div class="grid">${field('Type', sel('type', LINE_TYPES, r.type))}${field('Destination', sel('destination', DEST, r.destination))}${field('City / area', inp('city', r.city))}${field('Supplier / hotel', inp('supplier', r.supplier, 'text', 'list="supList"'))}${field('Service / room / vehicle', inp('service', r.service))}${field('Meal plan', sel('meal', ['', ...MEALS], r.meal))}${field('Valid from', inp('validFrom', r.validFrom, 'date'))}${field('Valid to', inp('validTo', r.validTo, 'date'))}${field('Cost', inp('cost', r.cost, 'number', 'step="any"'))}${field('Currency', sel('currency', CURS, r.currency))}${field('Unit', sel('unit', UNITS, r.unit))}</div><div style="margin-top:10px">${field('Notes (child policy, supplements…)', area('notes', r.notes))}</div>
   <datalist id="supList">${S.suppliers.map(s => `<option value="${esc(s.name)}">`).join('')}</datalist></div>
-  <div class="row"><button class="btn p" data-act="saveRate">Save</button><a class="btn" href="#/rates">Back</a><span class="sp"></span>${r.id ? `<button class="btn d" data-act="delRec" data-id="rates">Delete</button>` : ''}</div>`;
+  <div class="row"><button class="btn p" data-act="saveRate">Save</button><a class="btn" href="#/${UI.ratePage || 'hotelRates'}">Back</a><span class="sp"></span>${r.id ? `<button class="btn d" data-act="delRec" data-id="rates">Delete</button>` : ''}</div>`;
 
 /* ---------- itineraries ---------- */
 V.itineraries = { title: 'Itineraries', render() {
@@ -52,10 +58,10 @@ EDIT.request = r => `<div class="card"><h2>${esc(r.title || 'Availability reques
   <div class="grid"><div><span class="note">Agent</span><div><b>${esc(agentName(r.agentId))}</b> · ${esc(r.byName)}</div></div><div><span class="note">Dates</span><div>${esc(r.arrival)} → ${esc(r.departure)}</div></div><div><span class="note">Pax</span><div>${num(r.adults)} adults${num(r.children) ? ', ' + num(r.children) + ' children' : ''}</div></div><div><span class="note">Nationality</span><div>${esc(r.nationality)}</div></div></div>
   <p style="white-space:pre-line">${esc(r.notes)}</p>
   <div class="grid">${field('Status', sel('status', ['New request', 'In progress', 'Quoted', 'Confirmed', 'Declined'], r.status || 'New request'))}</div><div style="margin-top:10px">${field('Reply shown to the agent', area('reply', r.reply))}</div></div>
-  <div class="row"><button class="btn p" data-act="saveRequest">Save</button>${r.inquiry ? `<a class="btn" ${go('inquiry/' + esc(r.inquiry))}>Open inquiry</a>` : `<button class="btn a" data-act="reqToInquiry">Create inquiry</button>`}<a class="btn" href="#/requests">Back</a></div>`;
+  <div class="row"><button class="btn p" data-act="saveRequest">Save</button>${r.quote ? `<a class="btn" ${go('quote/' + esc(r.quote))}>Open quotation</a>` : `<button class="btn a" data-act="reqToQuote">Create quotation</button>`}<a class="btn" href="#/requests">Back</a></div>`;
 
 /* ---------- users and logins ---------- */
-V.users = { title: 'Users and logins', render() {
+V.users = { title: 'Team & Users', render() {
   const ft = UI.tab.users || 'staff';
   const tabs = [['staff', 'Team logins'], ['agents', 'Agent portal logins']].map(([k, l]) => `<button class="${ft === k ? 'on' : ''}" data-act="tab" data-k="users" data-id="${k}">${l}</button>`).join('');
   const isA = ft === 'agents';
