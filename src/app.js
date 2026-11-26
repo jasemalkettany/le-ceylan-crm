@@ -6,6 +6,9 @@ import { V, EDIT, ratePicker, calcText, crumbs, DEFAULT_TERMS, DEFAULT_INC, DEFA
 import { RATE_COLS, RATE_PAGES, accessFields, ROLE_PRESETS, SHEET_COLS, dayPicker } from './admin.js';
 import { P } from './portal.js';
 import { MORE_A, setRender, syncTiers, pendingCount, portalFooter } from './more.js';
+import { AGENT_A, loadProfile } from './agentx.js';
+import { STUDIO_A, publicView, importContacts } from './studio.js';
+Object.assign(MORE_A, AGENT_A, STUDIO_A);
 import { ROLES, roleName } from './core.js';
 import { buildDoc, statement, showDoc, printDoc } from './docs.js';
 import { myEmployee, leaveDays } from './hr.js';
@@ -23,24 +26,26 @@ const ico = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 // modules across the top; each has its own side menu (RezLive-style layout, VoyEngine features)
 const MODS_STAFF = [
   { k: 'dashboard', label: 'Dashboard', icon: 'dashboard', items: [['dashboard', 'Dashboard'], ['requests', 'Portal requests']] },
-  { k: 'sales', label: 'Sales', icon: 'quotes', items: [['quotes', 'Quotations'], ['quote/new', 'New quotation'], ['agents', 'Travel Agents & Customers'], ['requests', 'Portal requests']] },
+  { k: 'sales', label: 'Sales', icon: 'quotes', items: [['quotes', 'Quotations'], ['quote/new', 'New quotation'], ['agents', 'Travel Agents & Customers'], ['requests', 'Portal requests'], ['aquotes', 'Agent quotations'], ['visareq', 'Visa requests'], ['registrations', 'Agent sign-ups']] },
   { k: 'operations', label: 'Operations', icon: 'bookings', items: [['bookings', 'Bookings'], ['arrivals', 'Arrivals & departures']] },
-  { k: 'rates', label: 'Rates & supply', icon: 'hotelRates', items: [['hotelRates', 'Hotels & Rates'], ['transportRates', 'Transport & Tours'], ['activityRates', 'Activities'], ['guideRates', 'Guides'], ['suppliers', 'Suppliers'], ['dayplans', 'Day plans'], ['itineraries', 'Itineraries'], ['offers', 'Portal Offers'], ['approvals', 'Waiting approval']] },
+  { k: 'rates', label: 'Rates & supply', icon: 'hotelRates', items: [['hotelRates', 'Hotels & Rates'], ['transportRates', 'Transport & Tours'], ['activityRates', 'Activities'], ['guideRates', 'Guides'], ['suppliers', 'Suppliers'], ['dayplans', 'Day plans'], ['itineraries', 'Itineraries'], ['offers', 'Portal Offers'], ['slkit', 'Sri Lanka builder'], ['approvals', 'Waiting approval']] },
   { k: 'finance', label: 'Finance', icon: 'finance', items: [['finance/recv', 'Invoices'], ['finance/stmt', 'Statements'], ['finance/pay', 'Supplier bills'], ['finance/pl', 'P&L & reports'], ['finance/qb', 'QuickBooks']] },
   { k: 'hr', label: 'HR', icon: 'users', items: [['employees', 'Employees'], ['leave', 'Leave'], ['attendance', 'Attendance'], ['expiries', 'Expiry alerts']] },
   { k: 'chat', label: 'Chat & tasks', icon: 'requests', items: [['chat', 'Team chat'], ['tasks', 'Tasks']] },
-  { k: 'admin', label: 'Admin', icon: 'settings', items: [['users', 'Team & Users'], ['approvals', 'Approvals'], ['settings', 'Companies & settings'], ['portalset', 'Agent portal']] },
+  { k: 'admin', label: 'Admin', icon: 'settings', items: [['users', 'Team & Users'], ['approvals', 'Approvals'], ['settings', 'Companies & settings'], ['portalset', 'Agent portal'], ['contacts', 'Agent contacts'], ['campaigns', 'Email campaigns']] },
 ];
 const HR_ONLY = ['employees', 'employee', 'expiries'];
 const MODS_AGENT = [
-  { k: 'home', label: 'Offers', icon: 'offers', items: [['home', 'Current offers']] },
+  { k: 'home', label: 'Home', icon: 'dashboard', items: [['home', 'Deals & destinations'], ['dest/Sri%20Lanka', 'Sri Lanka'], ['dest/Bali', 'Bali'], ['dest/Maldives', 'Maldives'], ['dest/Thailand', 'Thailand'], ['dest/Malaysia', 'Malaysia']] },
+  { k: 'slbuild', label: 'Sri Lanka builder', icon: 'itineraries', items: [['slbuild', 'Build a package'], ['myquotes', 'My quotations']] },
   { k: 'hotels', label: 'Hotels', icon: 'hotelRates', items: [['hotels', 'Hotel search']] },
   { k: 'tours', label: 'Tours', icon: 'bookings', items: [['tours', 'Tours & transfers']] },
   { k: 'itineraries', label: 'Itineraries', icon: 'itineraries', items: [['itineraries', 'Ready-made itineraries']] },
   { k: 'requests', label: 'Requests', icon: 'requests', items: [['requests', 'My requests'], ['request/new', 'Request availability']] },
   { k: 'bookings', label: 'Bookings', icon: 'bookings', items: [['bookings', 'My bookings']] },
   { k: 'accounts', label: 'Accounts', icon: 'finance', items: [['invoices', 'Invoices'], ['statement', 'Statement of account']] },
-  { k: 'account', label: 'My account', icon: 'account', items: [['account', 'Profile']] },
+  { k: 'visa', label: 'Visa', icon: 'requests', items: [['visa', 'Visa requests']] },
+  { k: 'account', label: 'My account', icon: 'account', items: [['account', 'Profile & branding'], ['help', 'Help & tutorials']] },
 ];
 export const SECTIONS_LIST = [['sales', 'Sales'], ['operations', 'Operations'], ['rates', 'Rates & supply'], ['finance', 'Finance'], ['admin', 'Admin']];
 const canSee = k => !isStaff() || k === 'dashboard' || k === 'chat' || k === 'hr' || S.me.role === 'admin' || (S.me.sections || ROLE_PRESETS[S.me.role] || ['sales']).includes(k);
@@ -54,14 +59,14 @@ function loginView(msg = '') {
   root.innerHTML = `<div class="login"><div class="login-l"><div class="brand"><i>LC</i><div><b>Le Ceylan</b><span>Travel operations workspace</span></div></div><form id="loginForm"><h1>Welcome back.</h1><p class="lead">Sign in to your travel workspace.</p>
   <label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label>
   <div class="err" id="loginErr">${esc(msg)}</div><button class="btn p big" type="submit">Sign in →</button><button class="link" type="button" data-act="forgot" style="justify-self:end">Forgot password?</button>
-  <p class="note" style="border-top:1px solid var(--line);padding-top:14px;margin-top:6px">Travel agent? Use the login your Le Ceylan account manager issued you.</p></form></div>
+  <p class="note" style="border-top:1px solid var(--line);padding-top:14px;margin-top:6px">Travel agent? Use the login your Le Ceylan account manager issued you. New agency? <a href="#/register">Register here</a>.</p></form></div>
   <div class="login-r"><h2>Every trip. Every detail.<br><span>One workspace.</span></h2><p>One workspace for the people, plans and details behind every journey.</p>
   <ul><li><b>Build the right quotation</b><span>Hotel rates, transport and activities together.</span></li><li><b>Keep every booking moving</b><span>Clear confirmations, passenger details and itineraries.</span></li><li><b>Know where your business stands</b><span>Invoices, supplier bills and multi-currency accounts.</span></li></ul>
   <div class="dests">${DEST.slice(0, 8).map(d => `<span>${esc(d)}</span>`).join('')}</div></div></div>`;
 }
 onAuthStateChanged(auth, async user => {
   stopAll(); stopChat(); S.user = user; S.me = null; UI.edit = null;
-  if (!user) { loginView(); return; }
+  if (!user) { if (/^#\/(register|unsub)/.test(location.hash)) root.innerHTML = publicView(location.hash); else loginView(); return; }
   root.innerHTML = '<div class="boot">Opening the register…</div>';
   try {
     const ref = doc(db, 'users', user.uid); const s = await getDoc(ref);
@@ -101,7 +106,7 @@ function route() {
   if (isStaff() && EDIT_COL[current.name]) startEdit();
   render(); scrollTo(0, 0);
 }
-window.addEventListener('hashchange', route);
+window.addEventListener('hashchange', () => { if (!S.user) { if (/^#\/(register|unsub)/.test(location.hash)) root.innerHTML = publicView(location.hash); else if (!$('#loginForm')) loginView(); return; } route(); });
 function startEdit() {
   const { name, id, params } = current; const col = EDIT_COL[name];
   if (id && id !== 'new') { const r = S[col].find(x => x.id === id); if (!r) { UI.edit = { kind: name, col, waiting: id }; return; } UI.edit = { kind: name, col, rec: clone(r) }; }
@@ -166,6 +171,8 @@ function refreshCalcs() { const q = UI.edit?.rec; if (!q) return;
 document.addEventListener('input', e => { if (e.target.id === 'agentQ') { UI.agentQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $('#agentQ'); n.focus(); n.setSelectionRange(pos, pos); return; } if (!UI.edit || !e.target.closest('#main')) return; store(e.target); refreshCalcs(); markDirty(); });
 document.addEventListener('change', e => {
   const el = e.target;
+  if (el.id === 'contactsIn' && el.files?.[0]) { importContacts(el.files[0]).catch(x => toast('Could not read the file: ' + x.message)); el.value = ''; return; }
+  if (el.dataset.actChange && (AGENT_A[el.dataset.actChange] || STUDIO_A[el.dataset.actChange])) { A[el.dataset.actChange](el.dataset.id, el); return; }
   if (el.dataset.filter) { UI.filter[el.dataset.filter] = el.value; render(); return; }
   if (el.dataset.actChange === 'useItin') { const it = S.itineraries.find(x => x.id === el.value); if (it && UI.edit?.rec) { Object.assign(UI.edit.rec, { itinerary: it.days || '', inclusions: it.inclusions || UI.edit.rec.inclusions || '', exclusions: it.exclusions || UI.edit.rec.exclusions || '' }); render(); toast('Itinerary copied'); } return; }
   if (el.id === 'roleSel' || el.id === 'roleEdit') { const box = el.id === 'roleSel' ? $('#accessBox') : $('#accessEdit'); if (box) box.innerHTML = accessFields({ role: el.value }); return; }

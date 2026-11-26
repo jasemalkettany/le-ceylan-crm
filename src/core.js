@@ -128,7 +128,7 @@ export function startData(onData) {
   unsubs.push(onSnapshot(doc(db, 'settings', 'main'), s => { S.settings = s.exists() ? s.data() : null; S.loaded.settings = true; onData(); }, e => { S.loaded.settings = true; onData(); }));
   if (isStaff()) {
     const own = S.me.role === 'salesexec';
-    for (const c of ['agents', 'suppliers', 'rates', 'itineraries', 'offers', 'dayplans', 'inquiries', 'quotes', 'bookings', 'requests', 'users', 'tasks']) sub(c, own && ['quotes', 'bookings'].includes(c) ? query(collection(db, c), where('createdBy', '==', S.user.uid)) : collection(db, c), onData);
+    for (const c of ['agents', 'suppliers', 'rates', 'itineraries', 'offers', 'dayplans', 'inquiries', 'quotes', 'bookings', 'requests', 'users', 'tasks', 'agentQuotes', 'visaRequests', 'registrations', 'contacts', 'campaigns']) sub(c, own && ['quotes', 'bookings'].includes(c) ? query(collection(db, c), where('createdBy', '==', S.user.uid)) : collection(db, c), onData);
     UI.canHR = S.me.role === 'admin' || (S.me.sections || []).includes('hr');
     for (const c of ['employees', 'leaves', 'attendance']) sub(c, UI.canHR ? collection(db, c) : query(collection(db, c), where('userId', '==', S.user.uid)), onData);
   } else if (S.me?.role === 'agent' && S.me.agentId) {
@@ -139,6 +139,8 @@ export function startData(onData) {
     sub('bookings', query(collection(db, 'portalBookings'), where('agent', '==', aid)), onData);
     sub('requests', query(collection(db, 'requests'), where('agentId', '==', aid)), onData);
     sub('portal', query(collection(db, 'portalHotels'), where('tier', '==', S.me.tier || 'A')), onData);
+    sub('agentQuotes', query(collection(db, 'agentQuotes'), where('agentId', '==', aid)), onData);
+    sub('visaRequests', query(collection(db, 'visaRequests'), where('agentId', '==', aid)), onData);
   }
 }
 

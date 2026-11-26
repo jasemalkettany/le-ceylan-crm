@@ -78,6 +78,30 @@ service cloud.firestore {
     match /chatReads/{uid} { allow read, write: if request.auth.uid == uid; }
     match /files/{id} { allow read, create: if isStaff(); match /parts/{p} { allow read, create: if isStaff(); } }
 
+
+    // agent portal v2: builder settings, agent branding, agent quotations, visa, sign-ups, contacts, campaigns
+    match /settings/srilanka { allow read: if isStaff(); allow write: if can('rates'); }
+    match /agentProfiles/{aid} { allow read: if isStaff() || (isAgent() && myAgent() == aid); allow write: if (isAgent() && myAgent() == aid) || isAdmin(); }
+    match /agentQuotes/{id} {
+      allow read: if isStaff() || (isAgent() && resource.data.agentId == myAgent());
+      allow create: if isAgent() && request.resource.data.agentId == myAgent();
+      allow update: if isStaff() || (isAgent() && resource.data.agentId == myAgent() && request.resource.data.agentId == myAgent());
+      allow delete: if isAdmin();
+    }
+    match /visaRequests/{id} {
+      allow read: if isStaff() || (isAgent() && resource.data.agentId == myAgent());
+      allow create: if isAgent() && request.resource.data.agentId == myAgent();
+      allow update: if isStaff();
+      match /files/{f} { allow read: if isStaff() || (isAgent() && resource.data.agentId == myAgent()); allow create: if isAgent() && request.resource.data.agentId == myAgent(); }
+    }
+    match /registrations/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['agency', 'name', 'email', 'phone', 'country', 'currency', 'license', 'status', 'createdAt']) && request.resource.data.status == 'New request' && request.resource.data.agency is string && request.resource.data.agency.size() < 200 && request.resource.data.email is string && request.resource.data.email.size() < 200;
+      allow read: if isStaff(); allow update: if can('sales') || isAdmin(); allow delete: if isAdmin();
+    }
+    match /contacts/{id} { allow read: if isStaff(); allow write: if can('sales') || isAdmin(); }
+    match /campaigns/{id} { allow read: if isStaff(); allow create: if can('sales') || isAdmin(); }
+    match /unsubs/{id} { allow create: if request.resource.data.keys().hasOnly(['email', 'at']) && request.resource.data.email is string && request.resource.data.email.size() < 200; allow read: if isStaff(); }
+
     // internal records: staff only
     match /bookings/{id} { allow read: if isStaff() && ownFile(); allow write: if can('sales') || can('operations') || can('finance'); }
     match /quotes/{id} { allow read: if isStaff() && ownFile(); allow write: if can('sales'); }

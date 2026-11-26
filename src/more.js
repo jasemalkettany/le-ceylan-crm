@@ -1,10 +1,12 @@
-import { db, doc, collection, updateDoc, setDoc, writeBatch, getDocs } from './fb.js';
+import { db, doc, collection, updateDoc, setDoc, writeBatch, getDocs, getDoc } from './fb.js';
+let parseKitFn = t => t; export const setKitParser = f => { parseKitFn = f; };
 import { S, UI, $, esc, num, fmt, today, cfg, coById, toast, openModal, closeModal, save, tagFor, table, field, inp, sel, CURS, photoTag, isAdmin, APPROVAL_COLS, flatLines, confirmBtn, userName } from './core.js';
 import { V, EDIT } from './staff.js';
 import { P } from './portal.js';
 
 let rerender = () => { };
 export const setRender = f => { rerender = f; };
+export const redraw = () => rerender();
 export const MORE_MODS = {};
 const go = h => `href="#/${h}"`;
 export const DEFAULT_TIERS = [{ id: 'A', name: 'Standard', markup: 15 }, { id: 'B', name: 'Preferred', markup: 10 }, { id: 'C', name: 'VIP', markup: 7 }];
@@ -36,8 +38,10 @@ V.portalset = { title: 'Agent portal', render() {
   <div class="card"><h2>Where requests go <span class="sub">agents choose WhatsApp or email · each company's own WhatsApp is used first</span></h2><div class="grid">${f('ps_wa', 'WhatsApp number', p.whatsapp, 'text', '+971 58 …')}${f('ps_email', 'Requests email', p.email, 'email', 'reservation@…')}<label>Price currency for agents<select id="ps_cur">${CURS.map(c => `<option ${c === (p.currency || 'USD') ? 'selected' : ''}>${c}</option>`).join('')}</select></label></div></div>
   <div class="card"><h2>Page footer <span class="sub">company details come from each company in Settings · agents see their own company</span></h2><div class="grid">${f('ps_ig', 'Instagram link', p.instagram, 'url', 'https://instagram.com/…')}${f('ps_fb', 'Facebook link', p.facebook, 'url')}${f('ps_li', 'LinkedIn link', p.linkedin, 'url')}${f('ps_tt', 'TikTok link', p.tiktok, 'url')}</div>
   <label style="margin-top:10px">Payment options shown to agents<textarea id="ps_pay" style="min-height:80px" placeholder="Bank transfer · Visa / Mastercard · Payment link on request">${esc(p.payments || '')}</textarea></label></div>
+  <div class="card"><h2>Help videos <span class="sub">one per line: Language | Title | YouTube link</span></h2><textarea id="ps_vid" style="min-height:90px" placeholder="Arabic | How to build a Sri Lanka package | https://youtu.be/…">${esc((p.videos || []).map(v => [v.lang, v.title, v.url].join(' | ')).join('\n'))}</textarea></div>
+  <div class="card"><h2>Visa services <span class="sub">one per line: Country | fee | currency | documents (comma) | requirements</span></h2><textarea id="ps_visa" style="min-height:90px" placeholder="Sri Lanka | 50 | USD | Passport copy, Photo, Ticket | ETA approved within 48 hours">${esc((p.visa || []).map(v => [v.country, v.fee, v.currency, v.docs, v.requirements].join(' | ')).join('\n'))}</textarea></div>
   <div class="card"><h2>Profit groups <span class="sub">markup added on our net rate · choose the group on each agent</span></h2>
-  <div id="tierRows">${t.map(x => `<div class="grid tierRow" data-id="${esc(x.id)}" style="margin-bottom:8px"><label>Group ${esc(x.id)} name<input class="tName" value="${esc(x.name)}"></label><label>Markup %<input class="tMk" type="number" step="any" value="${esc(x.markup)}"></label><div class="note" style="align-self:end;padding-bottom:10px">${agentsIn(x.id)} agents</div></div>`).join('')}</div>
+  <div id="tierRows">${t.map(x => `<div class="grid tierRow" data-id="${esc(x.id)}" style="margin-bottom:8px"><label>Group ${esc(x.id)} name<input class="tName" value="${esc(x.name)}"></label><label>Default markup %<input class="tMk" type="number" step="any" value="${esc(x.markup)}"></label>${['Hotel', 'Transfer', 'Tour', 'Guide', 'Other'].map(sv => `<label>${sv === 'Tour' ? 'Tours & activities' : sv === 'Transfer' ? 'Transport' : sv + 's'} %<input class="tSv" data-sv="${sv}" type="number" step="any" value="${esc(x.mk?.[sv] ?? '')}" placeholder="${esc(x.markup)}"></label>`).join('')}<label>Sri Lanka fee per person<input class="tSl" type="number" step="any" value="${esc(x.slPP ?? '')}" placeholder="from builder"></label><div class="note" style="align-self:end;padding-bottom:10px">${agentsIn(x.id)} agents</div></div>`).join('')}</div>
   <button class="btn s" data-act="addTier">Add group</button></div>
   <div class="row"><button class="btn p" data-act="savePortalSet">Save</button><span class="note">${p.published ? 'Prices last published ' + esc(p.published.slice(0, 16).replace('T', ' ')) : 'Prices not published yet'}. Publish again after you change rates or markups.</span></div>`;
 } };
@@ -55,7 +59,8 @@ export function syncTiers() {
 
 /* turn approved net rates into selling prices per profit group */
 const slug = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 90);
-export function buildPortal() {
+const mkFor = (t, type) => { const m = t.mk || {}; const k = type === 'Hotel' ? 'Hotel' : type === 'Transfer' ? 'Transfer' : type === 'Guide' ? 'Guide' : ['Tour', 'Activity', 'Entrance'].includes(type) ? 'Tour' : 'Other'; return m[k] !== undefined && m[k] !== '' ? num(m[k]) : num(t.markup); };
+export function buildPortal(kitT) {
   const pc = portal().currency || 'USD', fx = cfg().fx || {};
   const conv = (v, c) => { if (!c || c === pc) return v; const a = num(fx[c]), b = num(fx[pc]); return a && b ? v * a / b : NaN; };
   const rates = S.rates.filter(x => x.approved !== false && num(x.cost) && (!x.validTo || x.validTo >= today()));
@@ -63,21 +68,25 @@ export function buildPortal() {
   const supOf = x => S.suppliers.find(s => s.id === x.supplierId) || S.suppliers.find(s => (s.name || '').toLowerCase() === (x.supplier || '').toLowerCase()) || {};
   for (const x of rates) {
     if (isNaN(conv(1, x.currency))) { skipped++; continue; }
-    if (x.type === 'Hotel') { const k = `${x.destination}|${x.supplier}`; const s = supOf(x); (hotels[k] = hotels[k] || { kind: 'hotel', name: x.supplier || s.name || '', destination: x.destination || s.destination || '', city: x.city || s.city || '', area: s.area || '', stars: s.stars || '', description: s.description || '', photos: (s.photos || []).slice(0, 4), company: x.company || s.company || '', rates: [] }).rates.push(x); }
+    if (x.type === 'Hotel') { const k = `${x.destination}|${x.supplier}`; const s = supOf(x); (hotels[k] = hotels[k] || { kind: 'hotel', name: x.supplier || s.name || '', destination: x.destination || s.destination || '', city: x.city || s.city || '', area: s.area || '', stars: s.stars || '', description: s.description || '', photos: (s.photos || []).slice(0, 4), company: x.company || s.company || '', driverRoom: s.driverRoom === 'Yes', rates: [] }).rates.push(x); }
     else if (x.type !== 'Guide') { const k = x.destination || 'Other'; (tours[k] = tours[k] || { kind: 'tour', name: k, destination: x.destination || '', rates: [] }).rates.push(x); }
   }
   const out = {};
   for (const t of tiers()) {
-    const price = x => Math.ceil(conv(num(x.cost), x.currency) * (1 + num(t.markup) / 100));
+    const price = x => Math.ceil(conv(num(x.cost), x.currency) * (1 + mkFor(t, x.type) / 100));
     for (const [k, h] of Object.entries(hotels)) { const { rates: rs, ...rest } = h; out[`${t.id}_h_${slug(k)}`] = { ...rest, tier: t.id, currency: pc, rooms: rs.map(x => ({ service: x.service || '', meal: x.meal || '', validFrom: x.validFrom || '', validTo: x.validTo || '', price: price(x), unit: x.unit || '', notes: x.notes || '' })).sort((a, b) => a.price - b.price) }; }
     for (const [k, g] of Object.entries(tours)) { const { rates: rs, ...rest } = g; out[`${t.id}_t_${slug(k)}`] = { ...rest, tier: t.id, currency: pc, items: rs.map(x => ({ service: x.service || '', type: x.type || '', city: x.city || '', validFrom: x.validFrom || '', validTo: x.validTo || '', price: price(x), unit: x.unit || '', notes: x.notes || '' })).sort((a, b) => a.service.localeCompare(b.service)) }; }
   }
+  if (kitT) { const k = parseKitFn(kitT); const kc = k.currency || 'USD';
+    for (const t of tiers()) { const m = (v, type) => Math.round(conv(num(v), kc) * (1 + mkFor(t, type) / 100) * 100) / 100;
+      out[`${t.id}_slkit`] = { ...k, kind: 'slkit', tier: t.id, currency: pc, vehicles: k.vehicles.map(v => ({ ...v, perKm: m(v.perKm, 'Transfer') })), guideDay: m(k.guideDay, 'Guide'), guideRoom: m(k.guideRoom, 'Guide'), driverRoom: m(k.driverRoom, 'Transfer'), markupPP: Math.round(conv(num(t.slPP !== undefined && t.slPP !== '' ? t.slPP : k.markupPP), kc) * 100) / 100 }; } }
   return { out, skipped, hotels: Object.keys(hotels).length, tours: Object.values(tours).reduce((s, g) => s + g.rates.length, 0) };
 }
 async function publishPortal(btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Publishing…'; }
   try {
-    const { out, skipped, hotels, tours } = buildPortal(); const now = new Date().toISOString();
+    let kitT = null; try { const ks = await getDoc(doc(db, 'settings', 'srilanka')); kitT = ks.exists() ? ks.data() : null; } catch (e) { }
+    const { out, skipped, hotels, tours } = buildPortal(kitT); const now = new Date().toISOString();
     const old = await getDocs(collection(db, 'portalHotels'));
     let batch = writeBatch(db), n = 0; const flush = async () => { if (n) { await batch.commit(); batch = writeBatch(db); n = 0; } };
     for (const d of old.docs) if (!out[d.id]) { batch.delete(d.ref); if (++n >= 400) await flush(); }
@@ -216,8 +225,8 @@ export const MORE_A = {
   async savePortalSet() {
     const v = id => ($('#' + id)?.value || '').trim();
     const banner = v('ps_banner'); if (banner && !/^https:\/\//.test(banner)) { toast('The banner link must start with https://'); return; }
-    const t = [...document.querySelectorAll('.tierRow')].map(r => ({ id: r.dataset.id, name: r.querySelector('.tName').value.trim() || 'Group ' + r.dataset.id, markup: num(r.querySelector('.tMk').value) }));
-    try { await setDoc(doc(db, 'settings', 'main'), { portal: { ...portal(), headline: v('ps_head'), welcome: v('ps_text'), banner, whatsapp: v('ps_wa'), email: v('ps_email'), instagram: v('ps_ig'), facebook: v('ps_fb'), linkedin: v('ps_li'), tiktok: v('ps_tt'), payments: ($('#ps_pay')?.value || '').trim(), currency: v('ps_cur') || 'USD' }, tiers: t }, { merge: true }); toast('Saved. Publish prices to update what agents see.'); } catch (e) { toast('Could not save: ' + (e.code || '')); }
+    const t = [...document.querySelectorAll('.tierRow')].map(r => ({ id: r.dataset.id, name: r.querySelector('.tName').value.trim() || 'Group ' + r.dataset.id, markup: num(r.querySelector('.tMk').value), mk: Object.fromEntries([...r.querySelectorAll('.tSv')].filter(i => i.value !== '').map(i => [i.dataset.sv, num(i.value)])), slPP: r.querySelector('.tSl')?.value === '' ? '' : num(r.querySelector('.tSl')?.value) }));
+    try { await setDoc(doc(db, 'settings', 'main'), { portal: { ...portal(), headline: v('ps_head'), welcome: v('ps_text'), banner, whatsapp: v('ps_wa'), email: v('ps_email'), instagram: v('ps_ig'), facebook: v('ps_fb'), linkedin: v('ps_li'), tiktok: v('ps_tt'), payments: ($('#ps_pay')?.value || '').trim(), videos: ($('#ps_vid')?.value || '').split('\n').map(l => l.split('|').map(x => x.trim())).filter(c => c[0] && c[2]).map(([lang, title, url]) => ({ lang, title, url })), visa: ($('#ps_visa')?.value || '').split('\n').map(l => l.split('|').map(x => x.trim())).filter(c => c[0]).map(([country, fee, currency, docs, requirements]) => ({ country, fee: num(fee), currency: currency || 'USD', docs: docs || '', requirements: requirements || '' })), currency: v('ps_cur') || 'USD' }, tiers: t }, { merge: true }); toast('Saved. Publish prices to update what agents see.'); } catch (e) { toast('Could not save: ' + (e.code || '')); }
   },
   publishPortal(_, btn) { publishPortal(btn); },
   mailSup(idx, el) {
