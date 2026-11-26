@@ -258,3 +258,19 @@ export async function importContacts(file) {
     await save('contacts', { agency: pick(r, 'agency', 'company'), name: pick(r, 'name', 'contact'), email, phone: pick(r, 'phone', 'mobile', 'whatsapp'), country: pick(r, 'country'), lang: pick(r, 'language', 'lang') }, { silent: true }); have.add(email); n++; }
   toast(`${n} contacts imported${skip ? `, ${skip} skipped (no email or already there)` : ''}`);
 }
+
+/* ---------- itineraries in several languages ---------- */
+export const LANGS = ['Arabic', 'French', 'German', 'Russian', 'Japanese', 'Chinese', 'Spanish', 'Italian'];
+export const RTL = ['Arabic'];
+// days are written as blocks separated by a blank line: first line is the title, the rest is the description
+export const parseDays = t => String(t || '').split(/\n\s*\n/).map(b => b.trim()).filter(Boolean).map(b => { const [title, ...rest] = b.split('\n'); return { title: title.trim(), description: rest.join('\n').trim() }; });
+const daysText = r => (r.program || []).map(d => `${d.title || ''}\n${d.description || ''}`.trim()).join('\n\n');
+{ const base = EDIT.itinerary; if (base) EDIT.itinerary = r => { const h = base(r); const L = UI.trLang || 'Arabic'; const tr = (r.tr || {})[L] || {}; const rtl = RTL.includes(L) ? ' dir="rtl"' : '';
+  const card = `<div class="card"><h2>Translations <span class="sub">agents pick the language on the itinerary page and in the PDF</span></h2><div class="chips">${LANGS.map(l => `<button type="button" class="chip ${l === L ? 'on' : ''}" data-act="trLang" data-id="${l}">${l}${(r.tr || {})[l]?.title ? ' ✓' : ''}</button>`).join('')}</div>
+  <div class="grid"><label>Title in ${L}<input${rtl} data-act-change="trSet" data-id="title" value="${esc(tr.title || '')}"></label></div><label style="margin-top:8px">Summary in ${L}<textarea${rtl} data-act-change="trSet" data-id="summary">${esc(tr.summary || '')}</textarea></label>
+  <label style="margin-top:8px">Day by day in ${L} <span class="note">· one block per day, title on the first line, a blank line between days</span><textarea${rtl} style="min-height:220px" data-act-change="trSet" data-id="days" placeholder="${esc(daysText(r).slice(0, 300))}">${esc(tr.days || '')}</textarea></label></div>`;
+  const key = '<div class="row"><button class="btn p"'; const i = h.lastIndexOf(key); return i >= 0 ? h.slice(0, i) + card + h.slice(i) : h + card; }; }
+Object.assign(STUDIO_A, {
+  trLang(id) { UI.trLang = id; redraw(); },
+  trSet(k, el) { const r = UI.edit?.rec; if (!r) return; const L = UI.trLang || 'Arabic'; r.tr = r.tr || {}; r.tr[L] = { ...(r.tr[L] || {}), [k]: el.value }; UI.edit.dirty = true; },
+});

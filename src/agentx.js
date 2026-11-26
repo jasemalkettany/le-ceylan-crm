@@ -4,6 +4,9 @@ import { db, doc, collection, setDoc, updateDoc, getDoc } from './fb.js';
 import { S, UI, $, esc, num, fmt, today, cfg, coById, toast, openModal, closeModal, save, table, compressPhoto, photoTag, tagFor } from './core.js';
 import { P } from './portal.js';
 import { redraw } from './more.js';
+import { parseDays, RTL } from './studio.js';
+// the chosen language of an itinerary: returns the translated copy, or the original
+export function inLang(i, L = UI.itLang) { const t = L && (i.tr || {})[L]; if (!t || !t.title) return i; const tdays = parseDays(t.days); return { ...i, title: t.title, summary: t.summary || i.summary, program: tdays.length ? tdays.map((d, n) => ({ ...(i.program || [])[n], ...d })) : i.program, _rtl: RTL.includes(L) }; }
 
 const go = h => `href="#/${h}"`;
 const portal = () => cfg().portal || {};
@@ -89,12 +92,13 @@ P.offer = { title: 'Offer', render(id) {
   <div class="pcols"><div><div class="card"><div class="ptags">${o.badge ? `<span class="tag acc">${esc(o.badge)}</span>` : ''}${o.destination ? `<span class="tag">${esc(o.destination)}</span>` : ''}${o.travel ? `<span class="tag">Travel ${esc(o.travel)}</span>` : ''}</div><div style="white-space:pre-line;margin-top:10px">${esc(o.body || '')}</div></div>${days(o.program || [])}</div>${bookBox(o, 'offer')}</div>`;
 } };
 P.itinerary = { title: 'Itinerary', render(id) {
-  const i = (S.itineraries || []).find(x => x.id === id); if (!i || !visibleTo(i)) return '<div class="empty">This itinerary is no longer available.</div>';
+  const i0 = (S.itineraries || []).find(x => x.id === id); if (!i0 || !visibleTo(i0)) return '<div class="empty">This itinerary is no longer available.</div>';
+  const langs = Object.keys(i0.tr || {}).filter(l => i0.tr[l]?.title); const i = inLang(i0);
   const ph = [...(i.photos || []), ...(i.program || []).flatMap(d => d.photos || [])];
   const blk = (t, v) => v ? `<div class="card"><h2>${t}</h2><div style="white-space:pre-line">${esc(v)}</div></div>` : '';
   const route = (i.program || []).map(x => x.overnight).filter(Boolean).filter((x, n, a) => x !== a[n - 1]);
-  return `<p class="note"><a ${go('home')}>Home</a> / <a ${go('dest/' + encodeURIComponent(i.destination || ''))}>${esc(i.destination || '')}</a></p><h1 style="margin:4px 0 4px">${esc(i.title)}</h1><p class="note" style="margin:0 0 12px">${num(i.nights) ? num(i.nights) + ' nights' : ''}${route.length ? ' · ' + esc(route.join(' → ')) : ''}</p>${gallery(ph)}
-  <div class="pcols"><div>${i.summary ? `<div class="card"><p style="margin:0">${esc(i.summary)}</p></div>` : ''}${(i.program || []).length ? days(i.program) : blk('Day by day', i.days)}<div class="g2">${blk('Hotels', i.hotels)}${blk('Inclusions', i.inclusions)}${blk('Exclusions', i.exclusions)}</div></div>${bookBox(i, 'itinerary')}</div>`;
+  return `<p class="note"><a ${go('home')}>Home</a> / <a ${go('dest/' + encodeURIComponent(i.destination || ''))}>${esc(i.destination || '')}</a></p>${langs.length ? `<div class="chips" style="float:right"><button class="chip ${!UI.itLang ? 'on' : ''}" data-act="itLang" data-id="">English</button>${langs.map(l => `<button class="chip ${UI.itLang === l ? 'on' : ''}" data-act="itLang" data-id="${esc(l)}">${esc(l)}</button>`).join('')}</div>` : ''}<h1 style="margin:4px 0 4px"${i._rtl ? ' dir="rtl"' : ''}>${esc(i.title)}</h1><p class="note" style="margin:0 0 12px">${num(i.nights) ? num(i.nights) + ' nights' : ''}${route.length ? ' · ' + esc(route.join(' → ')) : ''}</p>${gallery(ph)}
+  <div class="pcols"><div${i._rtl ? ' dir="rtl"' : ''}>${i.summary ? `<div class="card"><p style="margin:0">${esc(i.summary)}</p></div>` : ''}${(i.program || []).length ? days(i.program) : blk('Day by day', i.days)}<div class="g2">${blk('Hotels', i.hotels)}${blk('Inclusions', i.inclusions)}${blk('Exclusions', i.exclusions)}</div></div>${bookBox(i, 'itinerary')}</div>`;
 } };
 
 /* ---------- agent branding: logo, details, own markup ---------- */
@@ -255,9 +259,10 @@ export const AGENT_A = {
   hsDest(id) { UI.hs = { ...(UI.hs || { open: {}, rooms: 1, sort: 'price', name: '', stars: '', max: '', cin: '', cout: '' }), dest: id, city: '' }; location.hash = '#/hotels'; },
   daysAll() { UI.daysOpen = !UI.daysOpen; redraw(); },
   pReq(id, el) { const k = el.dataset.k; const o = (k === 'offer' ? S.offers : S.itineraries).find(x => x.id === id); if (!o) return; req(o.title, `Hello, please check availability for:\n\n${o.title} (${o.destination || ''})\nPrice from: ${num(o.priceFrom) ? money(o.priceFrom, o.currency) + ' per person' : 'on request'}\nTravel date: \nGuests: \nNationality: \n\nAgent: ${me().name || ''} · ${S.me?.name || ''}`, { destination: o.destination }); },
-  async pPdf(id, el) { await loadProfile(); const k = el.dataset.k; const o = (k === 'offer' ? S.offers : S.itineraries).find(x => x.id === id); if (!o) return;
+  itLang(id) { UI.itLang = id; redraw(); },
+  async pPdf(id, el) { await loadProfile(); const k = el.dataset.k; let o = (k === 'offer' ? S.offers : S.itineraries).find(x => x.id === id); if (!o) return; if (k === 'itinerary') o = inLang(o);
     const price = num(o.priceFrom) ? withMk(conv(o.priceFrom, o.currency)) : 0;
-    printHtml(clientDoc({ title: o.title, sub: [o.destination, num(o.nights) ? num(o.nights) + ' nights' : '', o.travel].filter(Boolean).join(' · '), lines: [], dayList: o.program || [], priceLines: price ? [['Price from, per person', fmt(Math.ceil(price), agentCur())]] : [], notes: [o.body, o.inclusions ? 'Includes:\n' + o.inclusions : '', o.exclusions ? 'Excludes:\n' + o.exclusions : '', 'Subject to availability at the time of booking.'].filter(Boolean).join('\n\n') }), o.title); },
+    printHtml((o._rtl ? '<div dir="rtl">' : '<div>') + clientDoc({ title: o.title, sub: [o.destination, num(o.nights) ? num(o.nights) + ' nights' : '', o.travel].filter(Boolean).join(' · '), lines: [], dayList: o.program || [], priceLines: price ? [['Price from, per person', fmt(Math.ceil(price), agentCur())]] : [], notes: [o.body, o.inclusions ? 'Includes:\n' + o.inclusions : '', o.exclusions ? 'Excludes:\n' + o.exclusions : '', 'Subject to availability at the time of booking.'].filter(Boolean).join('\n\n') }) + '</div>', o.title); },
   async saveBrand() {
     const aid = S.me?.agentId; if (!aid) return; const f = $('#brLogo')?.files?.[0]; let logo = prof().logo || '';
     try { if (f) { logo = await compressPhoto(f, 500); if (logo.length > 300000) logo = await compressPhoto(f, 320); }
