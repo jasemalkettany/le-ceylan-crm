@@ -48,6 +48,26 @@ service cloud.firestore {
       allow update, delete: if isStaff();
     }
 
+    // photos: everyone signed in can see them (agents see offer and itinerary photos); staff upload
+    match /photos/{id} { allow read: if active(); allow create: if isStaff(); allow delete: if can('rates') || can('sales'); }
+    match /dayplans/{id} { allow read: if isStaff(); allow write: if can('rates'); }
+
+    // HR: HR staff see everyone; each person sees and files their own leave and attendance
+    match /employees/{id} { allow read: if can('hr') || (isStaff() && resource.data.userId == request.auth.uid); allow write: if can('hr'); }
+    match /leaves/{id} { allow read: if can('hr') || (isStaff() && resource.data.userId == request.auth.uid); allow create: if can('hr') || (isStaff() && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'Pending'); allow update, delete: if can('hr'); }
+    match /attendance/{id} { allow read: if can('hr') || (isStaff() && resource.data.userId == request.auth.uid); allow write: if can('hr') || (isStaff() && request.resource.data.userId == request.auth.uid); }
+
+    // tasks and team chat: staff only; direct messages only for their two members
+    match /tasks/{id} { allow read, create, update: if isStaff(); allow delete: if isAdmin() || (isStaff() && resource.data.by == request.auth.uid); }
+    function chOk(cid) { return isStaff() && (get(/databases/$(database)/documents/channels/$(cid)).data.dm == false || request.auth.uid in get(/databases/$(database)/documents/channels/$(cid)).data.members); }
+    match /channels/{cid} {
+      allow read, update: if isStaff() && (resource.data.dm == false || request.auth.uid in resource.data.members);
+      allow create: if isStaff() && (request.resource.data.dm == false || request.auth.uid in request.resource.data.members);
+      match /messages/{mid} { allow read: if chOk(cid); allow create: if chOk(cid) && request.resource.data.by == request.auth.uid; }
+    }
+    match /chatReads/{uid} { allow read, write: if request.auth.uid == uid; }
+    match /files/{id} { allow read, create: if isStaff(); match /parts/{p} { allow read, create: if isStaff(); } }
+
     // internal records: staff only
     match /bookings/{id} { allow read: if isStaff(); allow write: if can('sales') || can('operations') || can('finance'); }
     match /quotes/{id} { allow read: if isStaff(); allow write: if can('sales'); }

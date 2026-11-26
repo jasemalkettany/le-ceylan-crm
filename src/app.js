@@ -1,10 +1,14 @@
 import { auth, db, doc, getDoc, setDoc, writeBatch, collection, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, createLogin } from './fb.js';
+import { uploadPhotos, hydratePhotos, programText } from './core.js';
 import { S, UI, $, esc, num, fmt, today, addDays, toast, clone, cfg, coById, agentName, supName, isStaff, isAdmin, curCo, totals, flatLines, save, remove, nextNo, savePortalCopy, startData, stopAll,
   openModal, closeModal, confirmBtn, download, csv, LINE_TYPES, DEST, CURS, tagFor } from './core.js';
 import { V, EDIT, ratePicker, calcText, crumbs, DEFAULT_TERMS, DEFAULT_INC, DEFAULT_EXC } from './staff.js';
-import { RATE_COLS, RATE_PAGES, accessFields, ROLE_PRESETS, SHEET_COLS } from './admin.js';
+import { RATE_COLS, RATE_PAGES, accessFields, ROLE_PRESETS, SHEET_COLS, dayPicker } from './admin.js';
 import { P } from './portal.js';
 import { buildDoc, statement, showDoc, printDoc } from './docs.js';
+import { myEmployee, leaveDays } from './hr.js';
+import { startChat, stopChat, chatView, openThread, closeThread, send, newChannel, newDM, unreadCount, chatState, drawMessages, uploadFile, downloadFile } from './chat.js';
+import { taskForm, myOpenTasks } from './tasks.js';
 
 const root = $('#root');
 const ICON = {
@@ -19,10 +23,13 @@ const MODS_STAFF = [
   { k: 'dashboard', label: 'Dashboard', icon: 'dashboard', items: [['dashboard', 'Dashboard'], ['requests', 'Portal requests']] },
   { k: 'sales', label: 'Sales', icon: 'quotes', items: [['quotes', 'Quotations'], ['quote/new', 'New quotation'], ['agents', 'Travel Agents & Customers'], ['requests', 'Portal requests']] },
   { k: 'operations', label: 'Operations', icon: 'bookings', items: [['bookings', 'Bookings'], ['arrivals', 'Arrivals & departures']] },
-  { k: 'rates', label: 'Rates & supply', icon: 'hotelRates', items: [['hotelRates', 'Hotels & Rates'], ['transportRates', 'Transport & Tours'], ['activityRates', 'Activities'], ['guideRates', 'Guides'], ['suppliers', 'Suppliers'], ['itineraries', 'Itineraries'], ['offers', 'Portal Offers']] },
+  { k: 'rates', label: 'Rates & supply', icon: 'hotelRates', items: [['hotelRates', 'Hotels & Rates'], ['transportRates', 'Transport & Tours'], ['activityRates', 'Activities'], ['guideRates', 'Guides'], ['suppliers', 'Suppliers'], ['dayplans', 'Day plans'], ['itineraries', 'Itineraries'], ['offers', 'Portal Offers']] },
   { k: 'finance', label: 'Finance', icon: 'finance', items: [['finance/recv', 'Invoices'], ['finance/stmt', 'Statements'], ['finance/pay', 'Supplier bills'], ['finance/pl', 'P&L & reports'], ['finance/qb', 'QuickBooks']] },
+  { k: 'hr', label: 'HR', icon: 'users', items: [['employees', 'Employees'], ['leave', 'Leave'], ['attendance', 'Attendance'], ['expiries', 'Expiry alerts']] },
+  { k: 'chat', label: 'Chat & tasks', icon: 'requests', items: [['chat', 'Team chat'], ['tasks', 'Tasks']] },
   { k: 'admin', label: 'Admin', icon: 'settings', items: [['users', 'Team & Users'], ['settings', 'Settings']] },
 ];
+const HR_ONLY = ['employees', 'employee', 'expiries'];
 const MODS_AGENT = [
   { k: 'home', label: 'Offers', icon: 'offers', items: [['home', 'Current offers']] },
   { k: 'itineraries', label: 'Itineraries', icon: 'itineraries', items: [['itineraries', 'Ready-made itineraries']] },
@@ -32,11 +39,11 @@ const MODS_AGENT = [
   { k: 'account', label: 'My account', icon: 'account', items: [['account', 'Profile']] },
 ];
 export const SECTIONS_LIST = [['sales', 'Sales'], ['operations', 'Operations'], ['rates', 'Rates & supply'], ['finance', 'Finance'], ['admin', 'Admin']];
-const canSee = k => !isStaff() || k === 'dashboard' || S.me.role === 'admin' || (S.me.sections || ROLE_PRESETS[S.me.role] || ['sales']).includes(k);
+const canSee = k => !isStaff() || k === 'dashboard' || k === 'chat' || k === 'hr' || S.me.role === 'admin' || (S.me.sections || ROLE_PRESETS[S.me.role] || ['sales']).includes(k);
 const mods = () => (isStaff() ? MODS_STAFF : MODS_AGENT).filter(m => canSee(m.k));
 const ROUTE_MOD = (r) => { r = r || ''; if (!r) return (isStaff() ? MODS_STAFF : MODS_AGENT)[0]; const all = isStaff() ? MODS_STAFF : MODS_AGENT; return (all.find(m => m.k !== 'dashboard' && m.items.some(([h]) => h === r || h.split('/')[0] === r.split('/')[0])) || all[0]); };
-const EDIT_COL = { quote: 'quotes', booking: 'bookings', agent: 'agents', supplier: 'suppliers', rate: 'rates', itinerary: 'itineraries', offer: 'offers', request: 'requests' };
-const EDIT_NAV = { quote: 'quotes', booking: 'bookings', agent: 'agents', supplier: 'suppliers', itinerary: 'itineraries', offer: 'offers', request: 'requests' };
+const EDIT_COL = { employee: 'employees', dayplan: 'dayplans', quote: 'quotes', booking: 'bookings', agent: 'agents', supplier: 'suppliers', rate: 'rates', itinerary: 'itineraries', offer: 'offers', request: 'requests' };
+const EDIT_NAV = { employee: 'employees', dayplan: 'dayplans', quote: 'quotes', booking: 'bookings', agent: 'agents', supplier: 'suppliers', itinerary: 'itineraries', offer: 'offers', request: 'requests' };
 
 /* ---------- auth ---------- */
 function loginView(msg = '') {
@@ -49,7 +56,7 @@ function loginView(msg = '') {
   <div class="dests">${DEST.slice(0, 8).map(d => `<span>${esc(d)}</span>`).join('')}</div></div></div>`;
 }
 onAuthStateChanged(auth, async user => {
-  stopAll(); S.user = user; S.me = null; UI.edit = null;
+  stopAll(); stopChat(); S.user = user; S.me = null; UI.edit = null;
   if (!user) { loginView(); return; }
   root.innerHTML = '<div class="boot">Opening the register…</div>';
   try {
@@ -58,7 +65,7 @@ onAuthStateChanged(auth, async user => {
     S.me = { id: s.id, ...s.data() };
     if (S.me.active === false) { await signOut(auth); loginView('This login is suspended.'); return; }
   } catch (e) { console.error(e); await signOut(auth); loginView('Could not open your workspace: ' + (e.code || e.message)); return; }
-  shell(); startData(onData);
+  shell(); startData(onData); if (isStaff()) startChat(onChat);
   if (!location.hash || location.hash === '#/') location.hash = isStaff() ? '#/dashboard' : '#/home'; else route();
 });
 
@@ -68,7 +75,7 @@ function shell() {
   root.innerHTML = `<header class="hdr"><button class="btn s menu-btn" data-act="menu" aria-label="Menu">☰</button><div class="brand"><i>LC</i><div><b id="brandName">${isStaff() ? 'Le Ceylan' : esc(S.myAgent?.name || 'Agent portal')}</b><span>${isStaff() ? 'Destination management' : 'Powered by Le Ceylan'}</span></div></div><span class="sp"></span>
     ${isStaff() ? `<select id="coSel" aria-label="Company"></select>` : ''}<input id="q" placeholder="Search…" aria-label="Search">
     <div class="me"><i>${esc(initials)}</i><div><b>${esc(S.me.name || S.me.email)}</b><span>${esc(isStaff() ? S.me.role[0].toUpperCase() + S.me.role.slice(1) : 'Travel agent')}</span></div><button class="link" data-act="logout">Sign out</button></div></header>
-  <nav class="mods" id="mods">${mods().map(m => `<a href="#/${m.items[0][0]}" data-mod="${m.k}">${ico(m.icon)}<span>${m.label}</span>${m.k === 'dashboard' && isStaff() ? '<em class="badge" id="reqBadge" hidden></em>' : ''}</a>`).join('')}</nav>
+  <nav class="mods" id="mods">${mods().map(m => `<a href="#/${m.k === 'hr' && !UI.canHR ? 'leave' : m.items[0][0]}" data-mod="${m.k}">${ico(m.icon)}<span>${m.label}</span>${m.k === 'dashboard' && isStaff() ? '<em class="badge" id="reqBadge" hidden></em>' : m.k === 'chat' ? '<em class="badge" id="chatBadge" hidden></em>' : ''}</a>`).join('')}</nav>
   <div class="body"><aside class="sub" id="sub"></aside><main id="main"><div class="empty">Opening the register…</div></main></div>`;
   $('#q').addEventListener('input', () => { if (!UI.edit) render(); });
   $('#coSel')?.addEventListener('change', e => { try { localStorage.setItem('lc_co', e.target.value); } catch (x) { } render(); });
@@ -78,14 +85,14 @@ function drawNav(routeKey) {
   document.querySelectorAll('[data-mod]').forEach(a => a.classList.toggle('on', a.dataset.mod === m.k));
   const sub = $('#sub'); if (!sub) return;
   const full = (location.hash || '').replace(/^#\/?/, '').split('?')[0];
-  sub.innerHTML = `<h3>${esc(m.label)}</h3><div class="subbox">${m.items.map(([h, l]) => `<a href="#/${h}" class="${h === full || h === routeKey ? 'on' : ''}">${esc(l)}</a>`).join('')}</div>
+  sub.innerHTML = `<h3>${esc(m.label)}</h3><div class="subbox">${m.items.filter(([h]) => UI.canHR || !HR_ONLY.includes(h)).map(([h, l]) => `<a href="#/${h}" class="${h === full || h === routeKey ? 'on' : ''}">${esc(l)}</a>`).join('')}</div>
     ${isStaff() ? `<div class="subbox help"><b>Your account manager</b><span>${esc(cfg().companies.map(c => c.name).filter(Boolean).join(' · ') || 'Le Ceylan')}</span></div>` : `<div class="subbox help"><b>Your account manager</b><span>${esc(cfg().companies[0]?.phone || '')}</span><span>${esc(cfg().companies[0]?.email || '')}</span></div>`}`;
 }
 function fillCo() { const s = $('#coSel'); if (!s) return; const v = curCo(); const allowed = S.me?.companies?.length ? cfg().companies.filter(c => S.me.companies.includes(c.id)) : cfg().companies; s.innerHTML = (allowed.length > 1 ? '<option value="">All companies</option>' : '') + allowed.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join(''); s.value = v; }
 function parseHash() { const h = (location.hash || '').replace(/^#\/?/, ''); const [path, qs] = h.split('?'); const [name, id] = path.split('/'); const params = Object.fromEntries(new URLSearchParams(qs || '')); return { name: name || '', id, params }; }
 let current = {};
 function route() {
-  if (!S.me) return; current = parseHash(); UI.edit = null; UI.step = 0; UI.agentQ = ''; closeModal();
+  if (!S.me) return; current = parseHash(); UI.edit = null; UI.step = 0; UI.agentQ = ''; closeModal(); if (current.name !== 'chat') closeThread();
   $('#sub')?.classList.remove('open');
   if (isStaff() && EDIT_COL[current.name]) startEdit();
   render(); scrollTo(0, 0);
@@ -96,7 +103,7 @@ function startEdit() {
   if (id && id !== 'new') { const r = S[col].find(x => x.id === id); if (!r) { UI.edit = { kind: name, col, waiting: id }; return; } UI.edit = { kind: name, col, rec: clone(r) }; }
   else UI.edit = { kind: name, col, rec: blank(name, params) };
   const r = UI.edit.rec;
-  if (r && ['quote', 'booking'].includes(name)) for (const k of ['hotels', 'transport', 'activities', 'misc', 'payments', 'destinations']) r[k] = r[k] || [];
+  if (r && ['quote', 'booking'].includes(name)) for (const k of ['hotels', 'transport', 'activities', 'misc', 'payments', 'destinations', 'program']) r[k] = r[k] || [];
   if (name === 'quote' && r && !r.id && params?.req) { const q = S.requests.find(x => x.id === params.req); if (q) { Object.assign(r, { agent: q.agentId, lead: q.lead || '', adults: q.adults, children: q.children, childAges: q.childAges || '', nationality: q.nationality || '', arrival: q.arrival, departure: q.departure, agentRef: q.agentRef || '', notes: `${q.title ? q.title + '\n' : ''}${q.notes || ''}`, request: q.id, destinations: q.destination ? [q.destination] : [] }); const ag = S.agents.find(a => a.id === q.agentId); if (ag) { r.currency = ag.currency || r.currency; r.company = ag.company || r.company; } } }
 }
 function blank(kind) {
@@ -104,17 +111,21 @@ function blank(kind) {
   return ({ quote: { company: co, currency: cur, status: 'Draft', option: 'Option A', adults: 2, children: 0, destinations: [], hotelsIncluded: true, transportIncluded: true, hotels: [], transport: [], activities: [], misc: [], markupMethod: 'percent', markup: cfg().markup ?? 15, discountPct: 0, terms: DEFAULT_TERMS, inclusions: DEFAULT_INC, exclusions: DEFAULT_EXC, fx: {} },
     agent: { company: co, currency: 'USD', creditDays: 0, type: 'Travel Agent' }, supplier: { type: 'Hotel', currency: 'USD', destination: 'Sri Lanka' },
     rate: { type: (UI.rateTypes || ['Hotel'])[0], currency: 'USD', unit: (UI.rateTypes || ['Hotel'])[0] === 'Hotel' ? 'per room per night' : 'per person', meal: (UI.rateTypes || ['Hotel'])[0] === 'Hotel' ? 'BB' : '', destination: 'Sri Lanka' },
-    itinerary: { destination: 'Sri Lanka', currency: 'USD', published: false }, offer: { destination: 'Sri Lanka', currency: 'AED', published: false } })[kind] || {};
+    itinerary: { destination: 'Sri Lanka', currency: 'USD', published: false, program: [], photos: [] }, offer: { destination: 'Sri Lanka', currency: 'AED', published: false, photos: [] }, dayplan: { destination: 'Sri Lanka', photos: [] }, employee: { status: 'Active', branch: 'UAE', company: co, annualLeave: 30, contractType: 'Full time', salaryCur: 'AED' } })[kind] || {};
 }
+function badges() { const c = $('#chatBadge'); if (c) { const n = unreadCount() + myOpenTasks(); c.hidden = !n; c.textContent = n; } }
+function onChat() { badges(); if (current.name !== 'chat') return; const list = $('.chlist'); if (!list) { render(); return; } const tmp = document.createElement('div'); tmp.innerHTML = chatView(current.id); list.replaceWith(tmp.querySelector('.chlist')); const t1 = $('.chtitle'), t2 = tmp.querySelector('.chtitle'); if (t1 && t2) t1.innerHTML = t2.innerHTML; }
 function onData() {
   fillCo();
+  badges();
   const b = $('#reqBadge'); if (b) { const n = S.requests.filter(r => (r.status || 'New request') === 'New request').length; b.hidden = !n; b.textContent = n; }
   if (UI.edit?.waiting) { const r = S[UI.edit.col].find(x => x.id === UI.edit.waiting); if (r) { startEdit(); render(); } return; }
   if (UI.edit) return; // never re-render under someone typing
+  if (current.name === 'chat') { onChat(); return; }
   if (!isStaff() && S.myAgent) { const bm = $('#brandName'); if (bm) bm.textContent = S.myAgent.name; }
   render();
 }
-const EDIT_TITLE = { quote: 'Quotations', booking: 'Bookings', agent: 'Travel Agents & Customers', supplier: 'Suppliers', rate: 'Rates', itinerary: 'Itineraries', offer: 'Portal Offers', request: 'Portal requests' };
+const EDIT_TITLE = { employee: 'Employees', dayplan: 'Day plans', quote: 'Quotations', booking: 'Bookings', agent: 'Travel Agents & Customers', supplier: 'Suppliers', rate: 'Rates', itinerary: 'Itineraries', offer: 'Portal Offers', request: 'Portal requests' };
 function setCrumbs(t) { const c = $('#crumbs'); if (c) c.innerHTML = `<span>Workspace</span><span class="sep">›</span><b>${esc(t)}</b>`; document.title = t + ' · Le Ceylan'; }
 function render() {
   const m = $('#main'); if (!m) return; const { name, id, params } = current;
@@ -126,18 +137,21 @@ function render() {
   if (isStaff()) {
     if (!S.loaded.settings) { m.innerHTML = '<div class="empty">Opening the register…</div>'; return; }
     if (!cfg().companies.length && name !== 'settings') { setCrumbs('Welcome'); m.innerHTML = `<div class="pagehead"><div><h1>Welcome.</h1><p class="lead">Add your companies first, then everything else opens up.</p></div><a class="btn p" href="#/settings">Open Settings</a></div>`; return; }
-    if (UI.edit) { setCrumbs(EDIT_TITLE[UI.edit.kind]); m.innerHTML = UI.edit.rec ? wrap(EDIT_TITLE[UI.edit.kind], EDIT[UI.edit.kind](UI.edit.rec)) : '<div class="empty">Opening…</div>'; bindPage(); return; }
+    if (UI.edit) { setCrumbs(EDIT_TITLE[UI.edit.kind]); m.innerHTML = UI.edit.rec ? wrap(EDIT_TITLE[UI.edit.kind], EDIT[UI.edit.kind](UI.edit.rec)) : '<div class="empty">Opening…</div>'; bindPage(); hydratePhotos(m); return; }
+    if (HR_ONLY.includes(name) && !UI.canHR) { m.innerHTML = `<div class="pagehead"><div><h1>No access</h1><p class="lead">Only HR can open employee files.</p></div></div>`; return; }
+    if (name === 'chat') { setCrumbs('Team chat'); const keep = $('#chatForm textarea')?.value; m.innerHTML = chatView(id); if (keep) $('#chatForm textarea').value = keep; if (id) { const seed = id.startsWith('bk_') ? (() => { const b = S.bookings.find(x => x.id === id.slice(3)); return { name: 'Booking ' + (b?.no || ''), dm: false, members: [], kind: 'booking', ref: id.slice(3), refType: 'booking' }; })() : id.startsWith('qt_') ? (() => { const q = S.quotes.find(x => x.id === id.slice(3)); return { name: 'Quotation ' + (q?.no || ''), dm: false, members: [], kind: 'booking', ref: id.slice(3), refType: 'quote' }; })() : null; openThread(id, seed); drawMessages(); } bindPage(); return; }
     const v = V[name] || V.dashboard; setCrumbs(v.title); m.innerHTML = wrap(v.title, v.render(id));
   } else {
     let v = P[name] || P.home, arg = id; if (name === 'request' && id === 'new') { v = P.newRequest; arg = params; }
     setCrumbs(v.title); m.innerHTML = wrap(v.title, v.render(arg));
     if (name === 'statement') { const bx = $('#stmtBox'); if (bx) bx.innerHTML = statement(S.me.agentId).html; }
   }
-  bindPage();
+  bindPage(); hydratePhotos(m);
 }
 
 /* ---------- editing ---------- */
 const NUMERIC = /\.(n|rate|km|perKm|days|perDay|extras|qty|price|pax|paid|amount)$|^(adults|children|markup|discountPct)$|^fx\./;
+function getPath(obj, path) { return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj); }
 function setPath(obj, path, val) { const ks = path.split('.'); let o = obj; for (let i = 0; i < ks.length - 1; i++) { const k = ks[i]; if (o[k] == null) o[k] = /^\d+$/.test(ks[i + 1]) ? [] : {}; o = o[k]; } o[ks[ks.length - 1]] = val; }
 function store(el) { const r = UI.edit?.rec; if (!r) return;
   if (el.dataset.path) setPath(r, el.dataset.path, NUMERIC.test(el.dataset.path) && el.value !== '' ? num(el.value) : el.value);
@@ -151,6 +165,11 @@ document.addEventListener('change', e => {
   if (el.dataset.actChange === 'useItin') { const it = S.itineraries.find(x => x.id === el.value); if (it && UI.edit?.rec) { Object.assign(UI.edit.rec, { itinerary: it.days || '', inclusions: it.inclusions || UI.edit.rec.inclusions || '', exclusions: it.exclusions || UI.edit.rec.exclusions || '' }); render(); toast('Itinerary copied'); } return; }
   if (el.id === 'roleSel' || el.id === 'roleEdit') { const box = el.id === 'roleSel' ? $('#accessBox') : $('#accessEdit'); if (box) box.innerHTML = accessFields({ role: el.value }); return; }
   if (el.id === 'rateFile' && el.files[0]) { readRates(el.files[0]); return; }
+  if (el.id === 'chatFile' && el.files.length) { const files = [...el.files]; toast('Uploading…'); (async () => { UI.atts = UI.atts || []; for (const f of files) { try { UI.atts.push(await uploadFile(f)); } catch (e) { toast(e.message || 'Upload failed'); } } drawPend(); toast('Ready to send'); })(); el.value = ''; return; }
+  if (el.id === 'dmPick' && el.value) { newDM(el.value).then(id => { location.hash = '#/chat/' + id; }); return; }
+  if (el.dataset.actChange === 'taskStatus') { const t = S.tasks.find(x => x.id === el.dataset.id); if (t) save('tasks', { ...t, status: el.value, doneAt: el.value === 'Done' ? new Date().toISOString() : '' }, { silent: true }); return; }
+  if (el.classList?.contains('photoIn') && el.files.length && UI.edit) { const path = el.dataset.path; toast('Uploading photos…'); uploadPhotos([...el.files]).then(ids => { const arr = getPath(UI.edit.rec, path) || []; setPath(UI.edit.rec, path, arr.concat(ids)); markDirty(); render(); toast(ids.length + ' photo' + (ids.length === 1 ? '' : 's') + ' added'); }).catch(e => { console.error(e); toast('Could not upload: ' + (e.code || e.message)); }); return; }
+  if (el.dataset.actChange === 'copyItin' && UI.edit?.rec) { const it = S.itineraries.find(x => x.id === el.value); if (it) { const r = UI.edit.rec; r.program = clone(it.program || []); if (!r.program.length && it.days) r.itinerary = it.days; if (it.inclusions) r.inclusions = it.inclusions; if (it.exclusions) r.exclusions = it.exclusions; markDirty(); render(); toast('Copied: ' + it.title); } return; }
   if (el.classList?.contains('sheetIn') && el.files[0]) { routeSheet(el.files[0], el.dataset.kind); return; }
   if (el.classList?.contains('qbIn') && el.files[0]) { readQB(el.files[0], el.dataset.kind); return; }
   if (!UI.edit || !el.closest('#main')) return;
@@ -218,15 +237,18 @@ async function readItin(file) {
 function routeSheet(file, kind) { if (/\.(docx|txt)$/i.test(file.name)) return readItin(file); readSheet(file, kind); }
 async function sheetRows(file) { const XLSX = await import('xlsx'); const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true, raw: /\.csv$/i.test(file.name) }); return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }); }
 const pick = (o, names) => { for (const k of Object.keys(o)) { const n = k.toLowerCase().replace(/[^a-z]/g, ''); if (names.includes(n)) return String(o[k] instanceof Date ? isoDate(o[k]) : o[k]).trim(); } return ''; };
+const urls = v => String(v || '').split(/[\s,;]+/).filter(u => /^https:\/\//.test(u));
 const yes = v => /^(y|yes|true|1|publish|published)$/i.test(String(v).trim());
 async function readSheet(file, kind) {
   try {
     const rows = await sheetRows(file); let out = [];
-    if (kind === 'offers') out = rows.map(o => ({ title: pick(o, ['title', 'offer', 'name']), destination: pick(o, ['destination', 'country']), priceFrom: num(pick(o, ['pricefrom', 'price', 'from'])), currency: (pick(o, ['currency', 'cur']) || 'AED').toUpperCase(), validTo: isoDate(pick(o, ['bookby', 'validto', 'validuntil', 'until'])), travel: pick(o, ['travelwindow', 'travel', 'traveldates']), body: pick(o, ['details', 'description', 'body', 'text']), published: yes(pick(o, ['publish', 'published'])) })).filter(x => x.title);
+    if (kind === 'offers') out = rows.map(o => ({ title: pick(o, ['title', 'offer', 'name']), destination: pick(o, ['destination', 'country']), priceFrom: num(pick(o, ['pricefrom', 'price', 'from'])), currency: (pick(o, ['currency', 'cur']) || 'AED').toUpperCase(), validTo: isoDate(pick(o, ['bookby', 'validto', 'validuntil', 'until'])), travel: pick(o, ['travelwindow', 'travel', 'traveldates']), body: pick(o, ['details', 'description', 'body', 'text']), photos: urls(pick(o, ['photourls', 'photos', 'photo', 'images', 'image'])), published: yes(pick(o, ['publish', 'published'])) })).filter(x => x.title);
+    if (kind === 'dayplans') out = rows.map(o => ({ title: pick(o, ['title', 'day', 'name']), destination: pick(o, ['destination', 'country']), city: pick(o, ['city', 'area']), overnight: pick(o, ['overnight', 'stay']), meals: pick(o, ['meals']), description: pick(o, ['description', 'details', 'text']), photos: urls(pick(o, ['photourls', 'photos', 'photo', 'images', 'image'])) })).filter(x => x.title);
     if (kind === 'itineraries') { const map = new Map();
-      rows.forEach(o => { const t = pick(o, ['title', 'itinerary', 'name']); if (!t) return; let it = map.get(t); if (!it) { it = { title: t, code: pick(o, ['code']), destination: pick(o, ['destination', 'country']), nights: num(pick(o, ['nights'])) || '', priceFrom: num(pick(o, ['pricefrom', 'price'])) || '', currency: (pick(o, ['currency']) || 'USD').toUpperCase(), validTo: isoDate(pick(o, ['validuntil', 'validto'])), summary: pick(o, ['summary', 'overview']), hotels: pick(o, ['hotels']), inclusions: pick(o, ['inclusions']), exclusions: pick(o, ['exclusions']), published: yes(pick(o, ['publish', 'published'])), _days: [] }; map.set(t, it); }
-        const day = pick(o, ['day']), txt = pick(o, ['daybyday', 'description', 'program', 'programme', 'details']); if (txt) it._days.push(day ? `Day ${day} – ${txt}` : txt); });
-      out = [...map.values()].map(({ _days, ...it }) => ({ ...it, days: _days.join('\n') })); }
+      rows.forEach(o => { const t = pick(o, ['title', 'itinerary', 'name']); if (!t) return; let it = map.get(t); if (!it) { it = { title: t, code: pick(o, ['code']), destination: pick(o, ['destination', 'country']), nights: num(pick(o, ['nights'])) || '', priceFrom: num(pick(o, ['pricefrom', 'price'])) || '', currency: (pick(o, ['currency']) || 'USD').toUpperCase(), validTo: isoDate(pick(o, ['validuntil', 'validto'])), summary: pick(o, ['summary', 'overview']), hotels: pick(o, ['hotels']), inclusions: pick(o, ['inclusions']), exclusions: pick(o, ['exclusions']), published: yes(pick(o, ['publish', 'published'])), photos: [], program: [], _days: [] }; map.set(t, it); }
+        const day = pick(o, ['day']), dt = pick(o, ['daytitle']), txt = pick(o, ['daybyday', 'description', 'program', 'programme', 'details']), ph = urls(pick(o, ['photourls', 'photos', 'photo', 'images', 'image']));
+        if (dt || (day && txt)) it.program.push({ title: dt || `Day ${day}`, description: txt, overnight: pick(o, ['overnight']), meals: pick(o, ['meals']), photos: ph }); else { if (txt) it._days.push(day ? `Day ${day} – ${txt}` : txt); if (ph.length) it.photos.push(...ph); } });
+      out = [...map.values()].map(({ _days, ...it }) => { const r = { ...it, days: _days.join('\n') }; if (r.program.length) { r.days = programText(r); if (!r.photos.length) r.photos = (r.program.find(d => d.photos.length)?.photos || []).slice(0, 1); } return r; }); }
     UI.pendingSheet = { kind, out };
     $('#sheetPreview').innerHTML = `<div style="margin-top:14px"><div class="row"><b>${out.length} ${kind} ready from ${esc(file.name)}</b><span class="sp"></span><button class="btn p" data-act="importSheet" ${out.length ? '' : 'disabled'}>Import ${out.length}</button></div>
       <div class="scroll" style="max-height:260px;margin-top:8px"><table><thead><tr><th>Title</th><th>Destination</th><th>Price from</th><th>Publish</th></tr></thead><tbody>${out.slice(0, 40).map(x => `<tr><td>${esc(x.title)}</td><td>${esc(x.destination)}</td><td>${x.priceFrom ? esc(fmt(x.priceFrom, x.currency)) : ''}</td><td>${x.published ? 'Yes' : 'Draft'}</td></tr>`).join('')}</tbody></table></div></div>`;
@@ -279,6 +301,8 @@ function qbExport(kind) {
   download(`quickbooks-${kind}-${short}-${today()}.csv`, csv(rows));
 }
 
+function drawPend() { const p = $('#pendAtts'); if (p) p.innerHTML = (UI.atts || []).map((a, i) => `<span class="chip">${esc(a.name)} <button type="button" data-act="rmAtt" data-id="${i}" aria-label="Remove">✕</button></span>`).join(''); }
+
 /* ---------- access ---------- */
 function readAccess(box, role) {
   const sections = [...box.querySelectorAll('input[name=sec]:checked')].map(i => i.value);
@@ -296,11 +320,31 @@ const A = {
   filter(id, el) { UI.filter[el.dataset.k] = id; render(); },
   tab(id, el) { UI.tab[el.dataset.k] = id; render(); },
   doc(kind) { showDoc(buildDoc(kind, UI.edit.rec)); },
+  agentItin(id) { const i = S.itineraries.find(x => x.id === id); if (i) showDoc(buildDoc('itinPlain', { ...i, program: i.program || [] })); },
   myStatement() { showDoc(statement(S.me.agentId)); },
   agentDoc(id, el) { const b = S.bookings.find(x => x.id === id); if (b) showDoc(buildDoc(el.dataset.k, b)); },
   stmt() { const a = $('#stmtAgent').value; if (!a) { toast('Choose an agent'); return; } showDoc(statement(a)); },
   qb(kind) { qbExport(kind); },
   step(i) { UI.step = +i; render(); scrollTo(0, 0); },
+  rmAtt(i) { UI.atts.splice(+i, 1); drawPend(); },
+  addLink() { openModal('Share a Google Drive link', `<form id="linkForm" style="display:grid;gap:12px"><label>Link<input name="url" required placeholder="https://drive.google.com/…"></label><label>Name<input name="name" placeholder="Hotel contract 2027"></label><div class="row"><span class="sp"></span><button class="btn p">Add to message</button></div></form>`); },
+  viewPhoto(id) { openModal('Photo', `<div style="text-align:center">${`<img data-photo="${esc(id)}" style="max-width:100%;border-radius:12px">`}</div>`); hydratePhotos($('#mbody')); },
+  dlFile(id) { toast('Downloading…'); downloadFile(id); },
+  newTask(_, el) { const pre = {}; if (el?.dataset.ref) Object.assign(pre, { ref: el.dataset.ref, refType: el.dataset.reftype, refLabel: el.dataset.reflabel }); else if (current.name === 'chat' && chatState.open) { const c = chatState.channels.get(chatState.open); Object.assign(pre, { channel: chatState.open, ref: c?.ref || '', refType: c?.refType || '', refLabel: c?.ref ? c.name : '' }); } openModal('New task', taskForm(pre)); },
+  taskFromMsg(mid) { const m = chatState.msgs.find(x => x.id === mid); const c = chatState.channels.get(chatState.open); openModal('Make a task', taskForm({ title: (m?.text || '').slice(0, 120), notes: m?.text || '', channel: chatState.open, ref: c?.ref || '', refType: c?.refType || '', refLabel: c?.ref ? c.name : '' })); },
+  toggleTask(id) { const t = S.tasks.find(x => x.id === id); if (!t) return; const done = t.status !== 'Done'; save('tasks', { ...t, status: done ? 'Done' : 'Open', doneAt: done ? new Date().toISOString() : '' }, { silent: true }); toast(done ? 'Done' : 'Reopened'); },
+  async saveEmployee() { const r = UI.edit.rec; if (!r.name) { toast('Name is needed'); return; } const id = await save('employees', r); if (id) location.hash = '#/employees'; },
+  async leaveDecide(id, el) { const l = S.leaves.find(x => x.id === id); if (!l) return; await save('leaves', { ...l, status: el.dataset.k, decidedBy: S.user.uid, decidedAt: new Date().toISOString() }, { silent: true }); toast('Leave ' + el.dataset.k.toLowerCase()); },
+  async checkIn() { const e = myEmployee(); if (!e) return; const t = new Date(); await save('attendance', { id: e.id + '_' + today(), employeeId: e.id, userId: S.user.uid, date: today(), in: t.toTimeString().slice(0, 5) }, { silent: true }); toast('Checked in'); },
+  async checkOut() { const e = myEmployee(); const a = e && S.attendance.find(x => x.employeeId === e.id && x.date === today()); if (!a) return; await save('attendance', { ...a, out: new Date().toTimeString().slice(0, 5) }, { silent: true }); toast('Checked out'); },
+  rmPhoto(i, el) { const arr = getPath(UI.edit.rec, el.dataset.k) || []; arr.splice(+i, 1); markDirty(); render(); },
+  addPhotoUrl(_, el) { const inp = el.parentElement.querySelector('.urlIn'); const u = (inp?.value || '').trim(); if (!/^https:\/\//.test(u)) { toast('Paste a web address starting with https://'); return; } const arr = getPath(UI.edit.rec, el.dataset.k) || []; setPath(UI.edit.rec, el.dataset.k, arr.concat(u)); markDirty(); render(); },
+  pickDays() { openModal('Add days from your day plans', `<div id="dpBody">${dayPicker(UI.edit.rec)}</div>`); const wire = () => { $('#dpq').oninput = () => { const v = $('#dpq').value; $('#dpBody').innerHTML = dayPicker(UI.edit.rec, v); wire(); hydratePhotos($('#dpBody')); const q = $('#dpq'); q.focus(); q.setSelectionRange(v.length, v.length); }; }; wire(); hydratePhotos($('#dpBody')); },
+  addDayPlan(id) { const d = S.dayplans.find(x => x.id === id); if (!d) return; const r = UI.edit.rec; (r.program = r.program || []).push({ dayId: d.id, title: d.title || '', description: d.description || '', overnight: d.overnight || '', meals: d.meals || '', photos: (d.photos || []).slice() }); markDirty(); toast('Day ' + r.program.length + ': ' + d.title); render(); },
+  addDay() { const r = UI.edit.rec; (r.program = r.program || []).push({ title: '', description: '', overnight: '', meals: '', photos: [] }); markDirty(); render(); },
+  moveDay(i, el) { const r = UI.edit.rec; i = +i; const j = i + +el.dataset.k; if (j < 0 || j >= r.program.length) return; [r.program[i], r.program[j]] = [r.program[j], r.program[i]]; markDirty(); render(); },
+  rmDay(i) { UI.edit.rec.program.splice(+i, 1); markDirty(); render(); },
+  async saveDayPlan() { const r = UI.edit.rec; if (!r.title) { toast('Title is needed'); return; } const id = await save('dayplans', r); if (id) location.hash = '#/dayplans'; },
   pickAgent(id) { const q = UI.edit.rec; q.agent = id; const ag = S.agents.find(a => a.id === id); if (ag) { q.currency = ag.currency || q.currency; if (ag.company) q.company = ag.company; } markDirty(); render(); },
   toggleDest(d) { const q = UI.edit.rec; q.destinations = q.destinations || []; const i = q.destinations.indexOf(d); if (i >= 0) q.destinations.splice(i, 1); else q.destinations.push(d); markDirty(); render(); },
   setIncl(v, el) { UI.edit.rec[el.dataset.k] = v === '1'; markDirty(); render(); },
@@ -321,7 +365,7 @@ const A = {
     if (k === 'hotels') q.hotels.push({ name: x.supplier, supplierId: x.supplierId || '', category: x.service, meal: x.meal || 'BB', checkIn: q.arrival || '', checkOut: q.departure || '', currency: x.currency, dest: x.destination || (q.destinations || [])[0] || '', rooms: { DBL: { n: 1, rate: x.cost } }, rateId: x.id });
     else q.activities.push({ date: q.arrival || '', name: x.service + (x.supplier ? ' — ' + x.supplier : ''), supplierId: x.supplierId || '', per: /person|pax/i.test(x.unit || '') ? 'person' : 'group', pax: pax || 1, price: x.cost, currency: x.currency, rateId: x.id });
     closeModal(); markDirty(); render(); toast('Added: ' + (x.supplier || x.service)); },
-  async saveQuote() { const r = UI.edit.rec; if (!r.no) r.no = await nextNo('pf', 'PF-', 1000); const id = await save('quotes', r); if (!id) return; if (!r.id) { r.id = id; history.replaceState(null, '', '#/quote/' + id); current = parseHash(); }
+  async saveQuote() { const r = UI.edit.rec; if ((r.program || []).length) r.itinerary = programText(r); if (!r.no) r.no = await nextNo('pf', 'PF-', 1000); const id = await save('quotes', r); if (!id) return; if (!r.id) { r.id = id; history.replaceState(null, '', '#/quote/' + id); current = parseHash(); }
     if (r.request) { const q = S.requests.find(x => x.id === r.request); if (q && !q.quote) await save('requests', { ...q, quote: id, status: 'Quoted' }, { silent: true }); } render(); },
   dupQuote() { const r = clone(UI.edit.rec); delete r.id; delete r.createdAt; delete r.createdBy; r.status = 'Draft'; const o = (r.option || 'Option A').match(/([A-Z])$/); r.option = o ? 'Option ' + String.fromCharCode(o[1].charCodeAt(0) + 1) : 'Option B'; UI.edit.rec = r; history.replaceState(null, '', '#/quote/new'); current = parseHash(); toast('Copied as ' + r.option + '. Change it, then Save'); render(); },
   async toBooking() {
@@ -337,16 +381,16 @@ const A = {
     if (q.request) { const r = S.requests.find(x => x.id === q.request); if (r) await save('requests', { ...r, status: 'Confirmed' }, { silent: true }); }
     toast('Booking ' + b.no + ' created'); location.hash = '#/booking/' + nid;
   },
-  async saveBooking() { const id = await save('bookings', UI.edit.rec); if (id) { await savePortalCopy(UI.edit.rec); render(); } },
+  async saveBooking() { if ((UI.edit.rec.program || []).length) UI.edit.rec.itinerary = programText(UI.edit.rec); const id = await save('bookings', UI.edit.rec); if (id) { await savePortalCopy(UI.edit.rec); render(); } },
   async saveSimple(col) { if (!UI.edit.rec.name) { toast('Name is needed'); return; } const id = await save(col, UI.edit.rec); if (id) location.hash = '#/' + col; },
   async delRec(col, btn) { if (!confirmBtn(btn, 'Click again to delete')) return; const id = UI.edit.rec.id; if (await remove(col, id)) { if (col === 'bookings') remove('portalBookings', id); location.hash = '#/' + col; } },
   async saveRate() { const r = UI.edit.rec; if (!r.supplier || !r.service) { toast('Supplier and service are needed'); return; } const s = S.suppliers.find(x => (x.name || '').toLowerCase() === r.supplier.toLowerCase()); if (s) r.supplierId = s.id; else { const sid = await save('suppliers', { name: r.supplier, type: r.type === 'Hotel' ? 'Hotel' : 'Other', destination: r.destination, currency: r.currency }, { silent: true }); r.supplierId = sid; } r.cost = num(r.cost); if (await save('rates', r)) location.hash = '#/' + (UI.ratePage || 'hotelRates'); },
   rateTemplate() { download('rates-template.csv', csv([RATE_COLS, ['Hotel', 'Sri Lanka', 'Kandy', 'Earl\'s Regency', 'Deluxe Room', 'BB', '2026-11-01', '2027-04-30', '120', 'USD', 'per room per night', 'Extra bed USD 35'], ['Transfer', 'Sri Lanka', 'Colombo', 'Island Cabs', 'Airport to Negombo - car', '', '2026-11-01', '2027-10-31', '25', 'USD', 'per car', ''], ['Activity', 'Bali', 'Ubud', 'Bali Swing', 'Swing with lunch', '', '2026-11-01', '2027-10-31', '450000', 'IDR', 'per person', '']])); },
   importRates, importSheet, importQB,
-  sheetTemplate(kind) { const ex = { offers: ['Maldives early-bird 4th night free', 'Maldives', '4999', 'AED', '2027-01-31', '1 Feb – 30 Apr 2027', 'Stay 4 pay 3 at selected resorts. Seaplane transfers included.', 'Yes'], itineraries: ['Sri Lanka Highlights', 'SL-7N', 'Sri Lanka', '7', '899', 'USD', '2027-10-31', 'Culture, tea country and beach in one week.', '1', 'Arrive Colombo, transfer to Negombo', 'Jetwing Lagoon; Earl\'s Regency', 'Private car and driver guide', 'Flights', 'Yes'] }[kind]; download(kind + '-template.csv', csv([SHEET_COLS[kind], ex])); },
+  sheetTemplate(kind) { const ex = { offers: ['Maldives early-bird 4th night free', 'Maldives', '4999', 'AED', '2027-01-31', '1 Feb – 30 Apr 2027', 'Stay 4 pay 3 at selected resorts. Seaplane transfers included.', 'https://example.com/photo.jpg', 'Yes'], itineraries: ['Sri Lanka Highlights', 'SL-7N', 'Sri Lanka', '7', '899', 'USD', '2027-10-31', 'Culture, tea country and beach in one week.', '1', 'Arrival in Colombo', 'Meet and greet at the airport, transfer to Negombo.', 'Negombo', 'Dinner', 'https://example.com/day1.jpg', 'Jetwing Lagoon; Earl\'s Regency', 'Private car and driver guide', 'Flights', 'Yes'], dayplans: ['Colombo to Kandy', 'Sri Lanka', 'Kandy', 'Kandy', 'Breakfast, Dinner', 'Drive to Kandy via the Pinnawala elephant orphanage. Evening visit to the Temple of the Tooth.', 'https://example.com/kandy.jpg'] }[kind]; download(kind + '-template.csv', csv([SHEET_COLS[kind], ex])); },
   async delRates(_, btn) { const f = UI.filter; let r = S.rates.filter(x => (UI.rateTypes || []).includes(x.type)); const q = ($('#q')?.value || '').toLowerCase(); if (f.rdest) r = r.filter(x => x.destination === f.rdest); if (q) r = r.filter(x => JSON.stringify(x).toLowerCase().includes(q)); if (!confirmBtn(btn, `Click again to delete ${r.length} rates`)) return; let batch = writeBatch(db), n = 0; for (const x of r) { batch.delete(doc(db, 'rates', x.id)); if (++n >= 400) { await batch.commit(); batch = writeBatch(db); n = 0; } } if (n) await batch.commit(); toast(r.length + ' rates deleted'); },
-  async saveItin() { const r = UI.edit.rec; if (!r.title) { toast('Title is needed'); return; } const id = await save('itineraries', r); if (id && !r.id) location.hash = '#/itinerary/' + id; },
-  async publishItin(f) { const r = UI.edit.rec; if (!r.title) { toast('Title is needed'); return; } r.published = f === '1'; const id = await save('itineraries', r, { silent: true }); if (id) { r.id = id; toast(r.published ? 'Published to the agent portal' : 'Unpublished'); render(); } },
+  async saveItin() { const r = UI.edit.rec; if (!r.title) { toast('Title is needed'); return; } if ((r.program || []).length) { r.days = programText(r); if (!r.nights) r.nights = Math.max(0, r.program.length - 1); } const id = await save('itineraries', r); if (id && !r.id) location.hash = '#/itinerary/' + id; },
+  async publishItin(f) { const r = UI.edit.rec; if (!r.title) { toast('Title is needed'); return; } if ((r.program || []).length) r.days = programText(r); r.published = f === '1'; const id = await save('itineraries', r, { silent: true }); if (id) { r.id = id; toast(r.published ? 'Published to the agent portal' : 'Unpublished'); render(); } },
   async saveOffer() { const r = UI.edit.rec; if (!r.title) { toast('Title is needed'); return; } const id = await save('offers', r); if (id && !r.id) location.hash = '#/offer/' + id; },
   async publishOffer(f) { const r = UI.edit.rec; if (!r.title) { toast('Title is needed'); return; } r.published = f === '1'; const id = await save('offers', r, { silent: true }); if (id) { r.id = id; toast(r.published ? 'Published to the agent portal' : 'Unpublished'); render(); } },
   async saveRequest() { if (await save('requests', UI.edit.rec)) location.hash = '#/requests'; },
@@ -374,7 +418,7 @@ document.addEventListener('click', e => {
   const t = e.target.closest('[data-act]'); if (t) { if (t.tagName === 'A') e.preventDefault(); A[t.dataset.act]?.(t.dataset.id, t, e); return; }
   const g = e.target.closest('[data-go]'); if (g && !e.target.closest('button,a,input,select')) location.hash = '#/' + g.dataset.go;
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); if (e.key === 'Enter' && !e.shiftKey && e.target.closest?.('#chatForm')) { e.preventDefault(); $('#chatForm').requestSubmit(); } });
 
 /* ---------- forms ---------- */
 document.addEventListener('submit', async e => {
@@ -394,6 +438,13 @@ document.addEventListener('submit', async e => {
     } catch (x) { toast(x.code === 'auth/email-already-in-use' ? 'That email already has a login' : 'Could not create: ' + (x.code || x.message)); }
     btn.disabled = false; btn.textContent = 'Create login'; return;
   }
+  if (f.id === 'chatForm') { const text = f.querySelector('textarea').value; const atts = UI.atts || []; if (!text.trim() && !atts.length) return; f.querySelector('textarea').value = ''; UI.atts = []; drawPend(); await send(text, atts); return; }
+  if (f.id === 'newChannel') { const id = await newChannel(fd.name || ''); if (id) location.hash = '#/chat/' + id; return; }
+  if (f.id === 'linkForm') { if (!/^https:\/\//.test(fd.url)) { toast('Use a link that starts with https://'); return; } (UI.atts = UI.atts || []).push({ kind: 'link', url: fd.url, name: fd.name || 'Shared link' }); closeModal(); drawPend(); return; }
+  if (f.id === 'taskForm') { const id = await save('tasks', { title: fd.title, notes: fd.notes, assignee: fd.assignee, due: fd.due, ref: fd.ref, refType: fd.refType, refLabel: fd.refLabel, channel: fd.channel, status: 'Open', by: S.user.uid }, { silent: true });
+    if (id) { closeModal(); toast('Task created for ' + (S.users.find(u => u.id === fd.assignee)?.name || 'teammate')); if (fd.channel && chatState.open === fd.channel) send(`Task for ${S.users.find(u => u.id === fd.assignee)?.name || 'teammate'}: ${fd.title}${fd.due ? ' (due ' + fd.due + ')' : ''}`); } return; }
+  if (f.id === 'leaveForm') { const me = myEmployee(); if (!me) return; const d = Object.fromEntries([...f.querySelectorAll('[data-f]')].map(el => [el.dataset.f, el.value])); if (!d.from || !d.to || d.to < d.from) { toast('Check the dates'); return; }
+    if (await save('leaves', { employeeId: me.id, userId: S.user.uid, type: d.type, from: d.from, to: d.to, reason: d.reason, status: 'Pending', days: leaveDays(d) }, { silent: true })) { toast('Leave request sent'); f.reset(); } return; }
   if (f.id === 'reqForm') {
     const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
     const it = S.itineraries.find(i => i.id === fd.itineraryId);

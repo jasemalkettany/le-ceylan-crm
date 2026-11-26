@@ -1,4 +1,4 @@
-import { auth, db, doc, setDoc, deleteDoc, collection, onSnapshot, query, where, runTransaction } from './fb.js';
+import { auth, db, doc, getDoc, setDoc, deleteDoc, collection, onSnapshot, query, where, runTransaction } from './fb.js';
 
 export const $ = s => document.querySelector(s);
 export const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -17,7 +17,7 @@ export const STAFF_ROLES = ['admin', 'manager', 'staff'];
 
 export const S = {
   user: null, me: null, settings: null, loaded: {},
-  agents: [], suppliers: [], rates: [], itineraries: [], offers: [], inquiries: [], quotes: [], bookings: [], requests: [], users: [],
+  agents: [], suppliers: [], rates: [], dayplans: [], employees: [], leaves: [], attendance: [], tasks: [], itineraries: [], offers: [], inquiries: [], quotes: [], bookings: [], requests: [], users: [],
   myAgent: null,
 };
 export const UI = { edit: null, tab: {}, filter: {} };
@@ -84,6 +84,35 @@ export function flatLines(q) {
 export const lineCalc = (l) => ({ cost: l.net, sell: l.sell, costLocal: l.netLocal });
 export const received = b => (b.payments || []).reduce((s, p) => s + num(p.amount), 0);
 
+/* photos: compressed in the browser and kept in the database (works on the free plan) */
+const photoCache = {};
+export async function compressPhoto(file, max = 1400) {
+  const bmp = await createImageBitmap(file); const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  let q = .78, url = c.toDataURL('image/jpeg', q); while (url.length > 850000 && q > .35) { q -= .1; url = c.toDataURL('image/jpeg', q); }
+  return url;
+}
+export async function uploadPhotos(files) {
+  const ids = [];
+  for (const f of files) { if (!/^image\//.test(f.type)) continue; const data = await compressPhoto(f); const ref = doc(collection(db, 'photos')); await setDoc(ref, { data, name: f.name, createdAt: new Date().toISOString(), createdBy: S.user?.uid || '' }); photoCache[ref.id] = data; ids.push(ref.id); }
+  return ids;
+}
+// a photo is either an uploaded id or a web address (from Excel)
+export const photoTag = (p, style = '') => !p ? '' : /^https:\/\//.test(p) ? `<img src="${esc(p)}" alt="" style="${style}" loading="lazy">` : `<img data-photo="${esc(p)}" alt="" style="${style}">`;
+export async function hydratePhotos(root = document) {
+  for (const img of root.querySelectorAll('img[data-photo]')) {
+    const id = img.dataset.photo; if (img.src && img.dataset.done) continue;
+    if (!photoCache[id]) { try { const s = await getDoc(doc(db, 'photos', id)); photoCache[id] = s.exists() ? s.data().data : ''; } catch (e) { photoCache[id] = ''; } }
+    if (photoCache[id]) { img.src = photoCache[id]; img.dataset.done = '1'; }
+  }
+}
+
+/* day-by-day programme shared by itineraries and quotations */
+export const programText = (rec) => (rec.program || []).map((d, i) => `Day ${i + 1} – ${d.title || ''}${d.description ? '\n' + d.description : ''}${d.overnight ? '\nOvernight: ' + d.overnight : ''}${d.meals ? '\nMeals: ' + d.meals : ''}`).join('\n\n');
+export const dayDate = (rec, i) => rec.arrival ? addDays(rec.arrival, i) : '';
+export const prettyDate = d => d ? new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '';
+
 /* data */
 const unsubs = [];
 export function stopAll() { while (unsubs.length) try { unsubs.pop()(); } catch (e) { } }
@@ -95,7 +124,9 @@ export function startData(onData) {
   stopAll();
   unsubs.push(onSnapshot(doc(db, 'settings', 'main'), s => { S.settings = s.exists() ? s.data() : null; S.loaded.settings = true; onData(); }, e => { S.loaded.settings = true; onData(); }));
   if (isStaff()) {
-    for (const c of ['agents', 'suppliers', 'rates', 'itineraries', 'offers', 'inquiries', 'quotes', 'bookings', 'requests', 'users']) sub(c, collection(db, c), onData);
+    for (const c of ['agents', 'suppliers', 'rates', 'itineraries', 'offers', 'dayplans', 'inquiries', 'quotes', 'bookings', 'requests', 'users', 'tasks']) sub(c, collection(db, c), onData);
+    UI.canHR = S.me.role === 'admin' || (S.me.sections || []).includes('hr');
+    for (const c of ['employees', 'leaves', 'attendance']) sub(c, UI.canHR ? collection(db, c) : query(collection(db, c), where('userId', '==', S.user.uid)), onData);
   } else if (S.me?.role === 'agent' && S.me.agentId) {
     const aid = S.me.agentId;
     unsubs.push(onSnapshot(doc(db, 'agents', aid), s => { S.myAgent = s.exists() ? { id: s.id, ...s.data() } : null; onData(); }, () => { }));
@@ -124,6 +155,7 @@ export async function savePortalCopy(b) {
     lead: b.lead || '', adults: b.adults || 0, children: b.children || 0, nationality: b.nationality || '', arrival: b.arrival || '', departure: b.departure || '', agentRef: b.agentRef || '',
     flightIn: b.flightIn || '', flightOut: b.flightOut || '', rooming: b.rooming || '', itinerary: b.itinerary || '', inclusions: b.inclusions || '', exclusions: b.exclusions || '', discount: b.discount || 0,
     payments: (b.payments || []).map(p => ({ date: p.date || '', amount: num(p.amount) })),
+    program: (b.program || []).map(d => ({ title: d.title || '', description: d.description || '', overnight: d.overnight || '', meals: d.meals || '', photos: (d.photos || []).slice(0, 3) })), hotelNames: (b.hotelsIncluded === false ? [] : (b.hotels || [])).map(h => ({ name: h.name || '', category: h.category || '', checkIn: h.checkIn || '', checkOut: h.checkOut || '', meal: h.meal || '' })), destinations: b.destinations || [],
     updatedAt: new Date().toISOString() };
   try { await setDoc(doc(db, 'portalBookings', b.id), copy); } catch (e) { console.error('portal copy', e); }
 }

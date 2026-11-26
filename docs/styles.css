@@ -170,3 +170,45 @@ input.sm,td.sm input{max-width:80px}input.md,td.md input{max-width:120px}.rooms 
   .hdr #q,.hdr .me div{display:none}
 }
 @media print{.hdr,.mods,.sub,.no-print{display:none!important}}
+
+/* photos and day programme */
+.photos{display:flex;flex-wrap:wrap;gap:8px}
+.ph{position:relative;width:120px;height:86px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--lilac)}
+.ph img{width:100%;height:100%;object-fit:cover;display:block}
+.ph .x{position:absolute;top:4px;right:4px;background:rgba(255,255,255,.92);width:26px;height:26px;color:var(--bad)}
+.ph.add{display:grid;place-items:center;cursor:pointer;color:var(--indigo);font-weight:600;font-size:13px;border-style:dashed}
+.ph.add:hover{border-color:var(--orange);color:var(--orange-d)}
+.day{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#FAFCFF}
+.dayhead{display:flex;align-items:center;gap:8px;margin-bottom:8px}.dayhead b{color:var(--orange-d)}
+.pday{display:flex;gap:14px;background:#fff}.pday img{width:200px;height:140px;object-fit:cover;border-radius:10px;flex:none}
+@media(max-width:600px){.pday{flex-direction:column}.pday img{width:100%;height:180px}}
+.tile .cover{height:150px;background:var(--lilac)}.tile .cover img{width:100%;height:100%;object-fit:cover;display:block}
+.tile .cover:empty{display:none}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:16px}.gallery img{width:100%;height:150px;object-fit:cover;border-radius:12px}
+
+/* chat */
+.chat{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;min-height:560px}
+.chlist{border:1px solid var(--line);border-radius:14px;padding:12px;overflow:auto;max-height:72vh}
+.chhead{font-size:11px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.05em;margin:4px 4px 6px}
+.chrow{display:block;padding:8px 10px;border-radius:8px;text-decoration:none;color:var(--ink);margin-bottom:2px}
+.chrow b{display:block;font-weight:500;font-size:13.5px}.chrow span{display:block;font-size:12px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chrow:hover{background:var(--lilac)}.chrow.on{background:var(--indigo);color:#fff}.chrow.on span{color:#C9D3E6}
+.chrow.unread b{font-weight:700}.chrow.unread b::after{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--orange);margin-left:6px;vertical-align:middle}
+.chpane{border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;min-height:560px;max-height:72vh}
+.chtitle{padding:12px 16px;border-bottom:1px solid var(--line);font-weight:600;color:var(--indigo)}
+.msgs{flex:1;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:8px;background:#FAFCFF}
+.msg{max-width:72%;align-self:flex-start;background:#fff;border:1px solid var(--line);border-radius:12px 12px 12px 4px;padding:8px 12px}
+.msg.me{align-self:flex-end;background:var(--indigo2);border-color:#D2DCEC;border-radius:12px 12px 4px 12px}
+.msg .who{font-size:11px;color:var(--mute);display:flex;gap:8px;align-items:center}
+.msg .txt{white-space:pre-wrap;overflow-wrap:anywhere}
+.mtask{margin-left:auto;background:none;border:0;color:var(--orange-d);font-size:11px;cursor:pointer;opacity:0}.msg:hover .mtask{opacity:1}.mtask:focus{opacity:1}
+.msgday{align-self:center;font-size:11px;color:var(--mute);background:var(--lilac);padding:2px 10px;border-radius:99px;margin:6px 0}
+.atts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.att.file{display:inline-flex;gap:8px;align-items:center;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;text-decoration:none;color:var(--ink);font-size:13px}
+.fi{background:var(--orange);color:#fff;font-size:10px;font-weight:700;border-radius:4px;padding:2px 5px}
+.chatin{border-top:1px solid var(--line);padding:10px 12px;display:grid;gap:8px}.chatin textarea{min-height:52px}
+.chtools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.pend{display:flex;gap:6px;flex-wrap:wrap;padding:0 12px}.pend:empty{display:none}
+.chip{display:inline-flex;gap:6px;align-items:center;background:var(--indigo2);color:var(--indigo);border-radius:99px;padding:3px 10px;font-size:12px}
+.chip button{border:0;background:none;cursor:pointer;color:var(--indigo)}
+@media(max-width:900px){.chat{grid-template-columns:1fr}.chlist{max-height:240px}}
