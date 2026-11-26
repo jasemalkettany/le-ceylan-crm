@@ -37,11 +37,11 @@ export const search = () => ($('#q')?.value || '').trim().toLowerCase();
 export const qMatch = r => { const q = search(); if (!q) return true; return JSON.stringify(r).toLowerCase().includes(q) || agentName(r.agent).toLowerCase().includes(q); };
 
 export function tagFor(s) {
-  const ok = ['Confirmed', 'Accepted', 'Booked', 'Completed', 'Paid', 'Published', 'Active', 'Done', 'On tour'];
+  const ok = ['Confirmed', 'Accepted', 'Booked', 'Completed', 'Paid', 'Published', 'Active', 'Done'];
   const bad = ['Lost', 'Rejected', 'Cancelled', 'Overdue', 'Suspended', 'Declined'];
   const acc = ['Sent', 'Quoted', 'In progress', 'Under process', 'Part paid', 'Working', 'New request', 'Pending', 'Awaiting approval'];
   const gr = ['Draft', 'Expired', 'Unpaid'];
-  const c = ok.includes(s) ? 'ok' : bad.includes(s) ? 'bad' : acc.includes(s) ? 'acc' : gr.includes(s) ? 'gr' : '';
+  const c = s === 'On tour' ? 'hot' : ok.includes(s) ? 'ok' : bad.includes(s) ? 'bad' : acc.includes(s) ? 'acc' : gr.includes(s) ? 'gr' : '';
   return `<span class="tag ${c}">${esc(s || 'New')}</span>`;
 }
 

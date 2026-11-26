@@ -26,7 +26,7 @@ V.dashboard = { title: 'Dashboard', render() {
   const name = (S.me?.name || '').split(' ')[0];
   const reqs = S.requests.filter(r => (r.status || 'New request') === 'New request').length;
   return `<div class="pagehead"><div><h1>Your reservations, at a glance.</h1><p class="lead">Welcome back${name ? ', ' + esc(name) : ''}. ${live.filter(b => b.status !== 'Completed').length} live booking${live.length === 1 ? '' : 's'} and ${onTour.reduce((s, b) => s + paxOf(b), 0)} travellers to look after.</p></div><a class="btn p" ${go('quote/new')}>+ New quotation</a></div>
-  <div class="strip"><a ${go('bookings')}><span>Awaiting confirmation</span><b>${awaiting.length}</b></a><a ${go('bookings')}><span>Confirmed bookings</span><b>${confirmed.length}</b></a><a ${go('bookings')}><span>Travelling now</span><b>${onTour.length}</b></a></div>
+  <div class="strip"><a ${go('bookings')}><span>Awaiting confirmation</span><b>${awaiting.length}</b></a><a ${go('bookings')}><span>Confirmed bookings</span><b>${confirmed.length}</b></a><a ${go('bookings')} class="${onTour.length ? 'hot' : ''}"><span>Travelling now</span><b>${onTour.length}</b></a></div>
   <div class="cols"><div>
     <div class="card"><h2>Bookings in motion <a class="link" ${go('bookings')}>View bookings ↗</a></h2>
       <div class="seg">${['Active', 'Awaiting confirmation', 'All bookings'].map(x => `<button class="${f === x ? 'on' : ''}" data-act="filter" data-k="dash" data-id="${x}">${x}</button>`).join('')}</div>
@@ -36,9 +36,9 @@ V.dashboard = { title: 'Dashboard', render() {
   </div><div>
     <div class="card queue"><h2>Your work queue</h2>
       <a ${go('quotes')}><div><b>Open quotations</b><span>Draft, sent or awaiting approval</span></div><em>${openQ.length}</em></a>
-      <a ${go('requests')}><div><b>Portal requests</b><span>New requests from agents</span></div><em>${reqs}</em></a>
+      <a ${go('requests')} class="${reqs ? 'hot' : ''}"><div><b>Portal requests</b><span>New requests from agents</span></div><em>${reqs}</em></a>
       <a ${go('bookings')}><div><b>Under process</b><span>Confirmations outstanding</span></div><em>${awaiting.length}</em></a>
-      <a ${go('bookings')}><div><b>On tour</b><span>Travelling right now</span></div><em>${onTour.length}</em></a></div>
+      <a ${go('bookings')} class="${onTour.length ? 'hot' : ''}"><div><b>On tour</b><span>Travelling right now</span></div><em>${onTour.length}</em></a></div>
   </div></div>`;
 } };
 

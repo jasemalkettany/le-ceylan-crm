@@ -22,5 +22,5 @@ export function dayPicker(rec, qq = '') {
 }
 
 
-const dueTag = t => !t.due ? '' : t.status !== 'Done' && t.due < today() ? `<span class="tag bad">${esc(t.due)}</span>` : t.due === today() ? `<span class="tag acc">Today</span>` : esc(t.due);
+const dueTag = t => !t.due ? '' : t.status !== 'Done' && t.due < today() ? `<span class="tag bad">${esc(t.due)}</span>` : t.due === today() ? `<span class="tag hot">Today</span>` : esc(t.due);
 export const fileTasks = (ref) => { const r = S.tasks.filter(t => t.ref === ref); return r.length ? r.map(t => `<div class="row" style="padding:6px 0;border-top:1px solid var(--line2)"><input type="checkbox" data-act="toggleTask" data-id="${esc(t.id)}" ${t.status === 'Done' ? 'checked' : ''} style="width:18px;min-height:18px"><span style="flex:1;${t.status === 'Done' ? 'text-decoration:line-through;color:var(--mute)' : ''}">${esc(t.title)}</span><span class="note">${esc(userName(t.assignee))}</span>${dueTag(t)}</div>`).join('') : '<p class="note">No tasks on this file yet.</p>'; };
