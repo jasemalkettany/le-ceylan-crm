@@ -1,8 +1,8 @@
-/* White pages, Le Ceylan blue #3C79A9 with olive #A7A83B, Poppins */
+/* White pages, Le Ceylan blue #3C79A9 with charcoal #2B3033, Poppins */
 :root{
   --ink:#1D2B38;--ink2:#43546A;--mute:#6C7C8E;--line:#E1E9F1;--line2:#F1F6FA;
   --bg:#FFFFFF;--lilac:#F5F9FC;--indigo:#3C79A9;--indigo-d:#2C5C82;--indigo2:#E9F1F8;
-  --orange:#A7A83B;--orange-d:#8C8D2E;--orange2:#F3F3E0;
+  --orange:#2B3033;--orange-d:#3C79A9;--orange2:#ECEEEF;
   --ok:#1F8A5B;--ok2:#E3F5EC;--warn:#9A6206;--warn2:#FFF4DE;--bad:#C8372D;--bad2:#FDE9E7;
 }
 *{box-sizing:border-box;min-width:0}
@@ -22,7 +22,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .login-l h1{font-size:26px;color:var(--indigo)}
 .login-r{color:#fff}
 .login-r h2{font-size:clamp(30px,3.6vw,46px);line-height:1.12;font-weight:700}
-.login-r h2 span{color:#FFFFFF;text-decoration:underline;text-decoration-color:#A7A83B;text-decoration-thickness:5px;text-underline-offset:8px}.login-r p{color:#E3EDF6;max-width:40ch}
+.login-r h2 span{color:#FFFFFF;text-decoration:underline;text-decoration-color:#2B3033;text-decoration-thickness:5px;text-underline-offset:8px}.login-r p{color:#E3EDF6;max-width:40ch}
 .login-r ul{list-style:none;padding:0;margin:26px 0;display:grid;gap:14px}
 .login-r li{display:flex;flex-direction:column;padding:12px 16px;background:rgba(255,255,255,.08);border-radius:12px;max-width:460px}
 .login-r li b{font-weight:600}.login-r li span{color:#DCE8F2;font-size:13px}
@@ -52,7 +52,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .subbox a{display:block;padding:9px 12px;border-radius:8px;text-decoration:none;color:var(--indigo);font-weight:500;background:var(--lilac)}
 .subbox a:hover{background:var(--indigo);color:#fff}
 .subbox a.on{background:var(--indigo);color:#fff}
-.subbox.help{border-color:#DCDCB0;background:#FAFAF0;padding:12px 14px}.subbox.help b{color:var(--orange-d);font-weight:600}.subbox.help span{font-size:12px;color:var(--mute)}
+.subbox.help{border-color:#D5DADD;background:#F6F7F8;padding:12px 14px}.subbox.help b{color:var(--orange);font-weight:600}.subbox.help span{font-size:12px;color:var(--mute)}
 main{min-width:0}
 @media(max-width:960px){.body{grid-template-columns:1fr}.sub{display:none}.sub.open{display:block}.menu-btn{display:inline-flex}.mods{justify-content:flex-start;overflow-x:auto;flex-wrap:nowrap}.mods a{flex:none}}
 
