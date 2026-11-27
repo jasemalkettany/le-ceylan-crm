@@ -306,3 +306,4 @@ body[data-role=dataentry] [data-act^=publish],body[data-role=dataentry] [data-ac
 .s-mg{display:grid;grid-template-columns:1fr 1fr;gap:40px;max-width:1100px;margin:auto;align-items:center}.s-mg-ph img{width:100%;border-radius:18px;display:block;box-shadow:0 14px 40px rgba(29,43,56,.18)}.s-lead{color:var(--ink2);font-size:16px;line-height:1.7}.s-mg-2{width:100%;border-radius:14px;margin-top:14px;display:block}
 .s-cta{background:linear-gradient(120deg,#2C5C82,#3C79A9);color:#fff;text-align:center;padding:50px 5vw}.s-cta h2{color:#fff;margin:0 0 8px;font-size:28px}.s-cta p{opacity:.9;margin:0 0 18px}.s-cta .btn{background:#fff;color:var(--indigo);border:0}
 @media(max-width:900px){.s-trust{grid-template-columns:1fr 1fr;margin:16px 4vw 0}.s-steps,.s-mg{grid-template-columns:1fr}.s-hero{min-height:auto}}
+#s-dest .s-grid{grid-template-columns:repeat(5,1fr)}@media(max-width:1000px){#s-dest .s-grid{grid-template-columns:repeat(2,1fr)}}
