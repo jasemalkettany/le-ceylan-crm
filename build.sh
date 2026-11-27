@@ -9,7 +9,7 @@ sed -i -E "s#src=\"app[^\"]*\.js\"#src=\"$APP\"#; s#href=\"styles\.css[^\"]*\"#h
 echo "built $APP"
 # mirror the same build to the CRM address (crm.leceylan.ae) if that repository is checked out next to this one
 if [ -d ../le-ceylan-crm-staff/.git ]; then
-  rsync -a --delete --exclude CNAME docs/ ../le-ceylan-crm-staff/docs/
+  rm -rf ../le-ceylan-crm-staff/docs && cp -r docs ../le-ceylan-crm-staff/docs
   echo "crm.leceylan.ae" > ../le-ceylan-crm-staff/docs/CNAME
   echo "mirrored to le-ceylan-crm-staff"
 fi
