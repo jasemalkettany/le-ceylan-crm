@@ -62,7 +62,7 @@ const EDIT_NAV = { employee: 'employees', dayplan: 'dayplans', quote: 'quotes', 
 
 /* ---------- auth ---------- */
 function loginView(msg = '') {
-  root.innerHTML = `<div class="login"><div class="login-l"><div class="brand"><i>LC</i><div><b>Le Ceylan</b><span>Travel operations workspace</span></div></div><form id="loginForm"><h1>Welcome back.</h1><p class="lead">Sign in to your travel workspace.</p>
+  root.innerHTML = `<div class="login"><div class="login-l"><div class="brand"><i>LC</i><div><b>Le Ceylan CRM</b><span>Destination management</span></div></div><form id="loginForm"><h1>Welcome back.</h1><p class="lead">Sign in to your travel workspace.</p>
   <label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label>
   <div class="err" id="loginErr">${esc(msg)}</div><button class="btn p big" type="submit">Sign in →</button><button class="link" type="button" data-act="forgot" style="justify-self:end">Forgot password?</button>
   <p class="note" style="border-top:1px solid var(--line);padding-top:14px;margin-top:6px">Travel agent? Use the login your Le Ceylan account manager issued you. New agency? <a href="#/register">Register here</a>.</p></form></div>
@@ -87,7 +87,7 @@ onAuthStateChanged(auth, async user => {
 /* ---------- shell and routing ---------- */
 function shell() {
   const initials = (S.me.name || S.me.email || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
-  root.innerHTML = `<header class="hdr"><button class="btn s menu-btn" data-act="menu" aria-label="Menu">☰</button><div class="brand"><i>LC</i><div><b id="brandName">${isStaff() ? 'Le Ceylan' : esc(S.myAgent?.name || 'Agent portal')}</b><span>${isStaff() ? 'Destination management' : 'Powered by Le Ceylan'}</span></div></div><span class="sp"></span>
+  root.innerHTML = `<header class="hdr"><button class="btn s menu-btn" data-act="menu" aria-label="Menu">☰</button><div class="brand"><i>LC</i><div><b id="brandName">${isStaff() ? 'Le Ceylan CRM' : 'Le Ceylan Destinations'}</b><span>${isStaff() ? 'Destination management' : 'Bookings' + (S.myAgent?.name ? ' · ' + esc(S.myAgent.name) : '')}</span></div></div><span class="sp"></span>
     ${isStaff() && ['admin', 'manager'].includes(S.me.role) ? `<button class="btn s" data-act="previewAgent">View agent portal</button>` : ''}${isStaff() ? `<select id="coSel" aria-label="Company"></select>` : ''}<input id="q" placeholder="Search…" aria-label="Search">
     <div class="me"><i>${esc(initials)}</i><div><b>${esc(S.me.name || S.me.email)}</b><span>${esc(isStaff() ? roleName(S.me.role) : 'Travel agent')}</span></div><button class="link" data-act="logout">Sign out</button></div></header>${S.me._preview ? `<div class="pvbar">Preview: you are seeing the agent portal as <b>${esc(S.myAgent?.name || '')}</b> sees it. Saving and sending are switched off. <button class="btn s" data-act="exitPreview">Back to the CRM</button></div>` : ''}
   <nav class="mods" id="mods">${mods().map(m => `<a href="#/${m.k === 'hr' && !UI.canHR ? 'leave' : m.items[0][0]}" data-mod="${m.k}">${ico(m.icon)}<span>${m.label}</span>${m.k === 'dashboard' && isStaff() ? '<em class="badge" id="reqBadge" hidden></em>' : m.k === 'chat' ? '<em class="badge" id="chatBadge" hidden></em>' : ''}</a>`).join('')}</nav>
