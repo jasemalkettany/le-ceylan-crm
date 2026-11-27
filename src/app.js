@@ -8,7 +8,12 @@ import { P } from './portal.js';
 import { MORE_A, setRender, syncTiers, pendingCount, portalFooter } from './more.js';
 import { AGENT_A, loadProfile } from './agentx.js';
 import { STUDIO_A, publicView, importContacts } from './studio.js';
-Object.assign(MORE_A, AGENT_A, STUDIO_A);
+Object.assign(MORE_A, AGENT_A, STUDIO_A, {
+  previewAgent() { const list = S.agents.filter(a => a.type !== 'Direct customer'); if (!list.length) { toast('Add a travel agent first'); return; }
+    openModal('View the agent portal', `<p class="note">See the portal exactly as one of your agents sees it: their offers, prices in their currency and their profit group.</p><label>Agent<select id="pvAgent">${list.map(a => `<option value="${esc(a.id)}">${esc(a.name)}${a.country ? ' · ' + esc(a.country) : ''}${a.currency ? ' · ' + esc(a.currency) : ''}</option>`).join('')}</select></label><div class="row" style="margin-top:12px"><button class="btn p" data-act="startPreview">Open portal</button></div>`); },
+  startPreview() { const aid = $('#pvAgent').value; const a = S.agents.find(x => x.id === aid); if (!a) return; closeModal(); stopChat(); S.realMe = S.me; S.me = { ...S.me, role: 'agent', agentId: aid, tier: a.tier || 'A', _preview: true }; S.myAgent = { ...a }; UI.prof = null; UI.sl = null; shell(); startData(onData); location.hash = '#/home'; route(); },
+  exitPreview() { if (!S.realMe) return; S.me = S.realMe; S.realMe = null; S.myAgent = null; UI.prof = null; shell(); startData(onData); startChat(onChat); location.hash = '#/dashboard'; route(); },
+});
 import { ROLES, roleName } from './core.js';
 import { buildDoc, statement, showDoc, printDoc } from './docs.js';
 import { myEmployee, leaveDays } from './hr.js';
@@ -82,8 +87,8 @@ onAuthStateChanged(auth, async user => {
 function shell() {
   const initials = (S.me.name || S.me.email || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   root.innerHTML = `<header class="hdr"><button class="btn s menu-btn" data-act="menu" aria-label="Menu">☰</button><div class="brand"><i>LC</i><div><b id="brandName">${isStaff() ? 'Le Ceylan' : esc(S.myAgent?.name || 'Agent portal')}</b><span>${isStaff() ? 'Destination management' : 'Powered by Le Ceylan'}</span></div></div><span class="sp"></span>
-    ${isStaff() ? `<select id="coSel" aria-label="Company"></select>` : ''}<input id="q" placeholder="Search…" aria-label="Search">
-    <div class="me"><i>${esc(initials)}</i><div><b>${esc(S.me.name || S.me.email)}</b><span>${esc(isStaff() ? roleName(S.me.role) : 'Travel agent')}</span></div><button class="link" data-act="logout">Sign out</button></div></header>
+    ${isStaff() && ['admin', 'manager'].includes(S.me.role) ? `<button class="btn s" data-act="previewAgent">View agent portal</button>` : ''}${isStaff() ? `<select id="coSel" aria-label="Company"></select>` : ''}<input id="q" placeholder="Search…" aria-label="Search">
+    <div class="me"><i>${esc(initials)}</i><div><b>${esc(S.me.name || S.me.email)}</b><span>${esc(isStaff() ? roleName(S.me.role) : 'Travel agent')}</span></div><button class="link" data-act="logout">Sign out</button></div></header>${S.me._preview ? `<div class="pvbar">Preview: you are seeing the agent portal as <b>${esc(S.myAgent?.name || '')}</b> sees it. Saving and sending are switched off. <button class="btn s" data-act="exitPreview">Back to the CRM</button></div>` : ''}
   <nav class="mods" id="mods">${mods().map(m => `<a href="#/${m.k === 'hr' && !UI.canHR ? 'leave' : m.items[0][0]}" data-mod="${m.k}">${ico(m.icon)}<span>${m.label}</span>${m.k === 'dashboard' && isStaff() ? '<em class="badge" id="reqBadge" hidden></em>' : m.k === 'chat' ? '<em class="badge" id="chatBadge" hidden></em>' : ''}</a>`).join('')}</nav>
   <div class="body"><aside class="sub" id="sub"></aside><main id="main"><div class="empty">Opening the register…</div></main></div>${isStaff() ? '' : '<footer class="pfoot" id="pfoot"></footer>'}`;
   $('#q').addEventListener('input', () => { if (!UI.edit) render(); });
@@ -428,7 +433,7 @@ function collectSettings() {
 }
 document.addEventListener('click', e => {
   if (e.target.id === 'modal') { closeModal(); return; }
-  const t = e.target.closest('[data-act]'); if (t) { if (t.tagName === 'A') e.preventDefault(); A[t.dataset.act]?.(t.dataset.id, t, e); return; }
+  const t = e.target.closest('[data-act]'); if (t) { if (t.tagName === 'A') e.preventDefault(); if (S.me?._preview && ['slSave', 'saveBrand', 'visaSend', 'hsSend', 'newReqSubmit'].includes(t.dataset.act)) { toast('Preview only: this works for the agent'); return; } A[t.dataset.act]?.(t.dataset.id, t, e); return; }
   const g = e.target.closest('[data-go]'); if (g && !e.target.closest('button,a,input,select')) location.hash = '#/' + g.dataset.go;
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); if (e.key === 'Enter' && !e.shiftKey && e.target.closest?.('#chatForm')) { e.preventDefault(); $('#chatForm').requestSubmit(); } });
