@@ -80,6 +80,7 @@ service cloud.firestore {
 
 
     // agent portal v2: builder settings, agent branding, agent quotations, visa, sign-ups, contacts, campaigns
+    match /settings/public { allow read: if true; allow write: if isAdmin(); }
     match /settings/srilanka { allow read: if isStaff(); allow write: if can('rates'); }
     match /agentProfiles/{aid} { allow read: if isStaff() || (isAgent() && myAgent() == aid); allow write: if (isAgent() && myAgent() == aid) || isAdmin(); }
     match /agentQuotes/{id} {

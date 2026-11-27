@@ -274,3 +274,56 @@ Object.assign(STUDIO_A, {
   trLang(id) { UI.trLang = id; redraw(); },
   trSet(k, el) { const r = UI.edit?.rec; if (!r) return; const L = UI.trLang || 'Arabic'; r.tr = r.tr || {}; r.tr[L] = { ...(r.tr[L] || {}), [k]: el.value }; UI.edit.dirty = true; },
 });
+
+/* ---------- public website (leceylan.ae): hero with login, destinations, offers, about, contact ---------- */
+const W_DEFAULT = { headline: 'Your destination partner in Asia', sub: 'B2B destination management for travel agents across the GCC and MENA: Sri Lanka, Bali, Maldives, Thailand and Malaysia.', hero: '', about: 'Le Ceylan is a destination management company serving travel agents and corporate clients across the GCC and MENA. Our own teams in Sri Lanka, Bali and the UAE handle every detail on the ground, from hotels and private transfers to guided tours and groups.', why: 'Own teams on the ground\nFast quotations and instant online prices\nArabic-speaking support\nTrusted by agents across the GCC', dests: 'Sri Lanka | | Culture, tea country and beaches\nBali | | Villas, temples and island life\nMaldives | | Overwater villas and private islands\nThailand | | Bangkok, Phuket and Krabi\nMalaysia | | Kuala Lumpur, Langkawi and Penang', phone: '+971 58 593 9503', email: 'Reservation@leceylan.me', whatsapp: '+971585939503', address: 'Dubai, United Arab Emirates', showPrices: '' };
+const wcfg = () => ({ ...W_DEFAULT, ...(cfg().website || {}) });
+V.website = { title: 'Website', render() {
+  const w = wcfg(); const f = (id, l, v, ph = '') => `<label>${l}<input id="${id}" value="${esc(v || '')}" placeholder="${esc(ph)}"></label>`; const ta = (id, l, v, h = 90) => `<label>${l}<textarea id="${id}" style="min-height:${h}px">${esc(v || '')}</textarea></label>`;
+  const offers = (S.offers || []).filter(o => o.published !== false && (o.aud || 'all') === 'all' && (!o.validTo || o.validTo >= today()));
+  return `<div class="pagehead"><div><h1>Website</h1><p class="lead">The public home page people see before they sign in (leceylan.ae): login boxes, destinations, offers, about us and contact.</p></div><div class="row"><button class="btn" data-act="saveSite">Save</button><button class="btn p" data-act="publishSite">Publish website</button></div></div>
+  <div class="card"><h2>Top of the page</h2><div class="grid">${f('w_head', 'Headline', w.headline)}${f('w_sub', 'Line under it', w.sub)}${f('w_hero', 'Background photo link (https)', w.hero, 'https://…')}</div></div>
+  <div class="g2"><div class="card"><h2>About us</h2>${ta('w_about', 'About text', w.about, 120)}${ta('w_why', 'Why us (one per line)', w.why)}</div>
+  <div class="card"><h2>Contact</h2><div class="grid">${f('w_phone', 'Phone', w.phone)}${f('w_email', 'Email', w.email)}${f('w_wa', 'WhatsApp', w.whatsapp)}${f('w_addr', 'Address', w.address)}</div></div></div>
+  <div class="card"><h2>Destinations <span class="sub">Name | photo link | short text</span></h2>${ta('w_dests', '', w.dests, 120)}</div>
+  <div class="card"><h2>Offers on the website <span class="sub">${offers.length} offers open to all agents · the 6 newest are shown</span></h2><label>Show prices to the public<select id="w_prices"><option value="">No, "ask for price"</option><option value="1" ${w.showPrices ? 'selected' : ''}>Yes</option></select></label></div>
+  <p class="note">${cfg().websitePublished ? 'Last published ' + esc(cfg().websitePublished.slice(0, 16).replace('T', ' ')) : 'Not published yet'}. To use www.leceylan.ae, the domain has to point to this site: I can set it up when you give me access to where the domain is registered.</p>`;
+} };
+const readSite = () => { const v = id => ($('#' + id)?.value ?? '').trim(); return { headline: v('w_head'), sub: v('w_sub'), hero: v('w_hero'), about: v('w_about'), why: v('w_why'), dests: v('w_dests'), phone: v('w_phone'), email: v('w_email'), whatsapp: v('w_wa'), address: v('w_addr'), showPrices: v('w_prices') }; };
+async function thumb(p, max = 520) {
+  let src = p; if (!src) return ''; if (/^https:\/\//.test(src)) return src;
+  try { const s = await getDoc(doc(db, 'photos', p)); src = s.exists() ? s.data().data : ''; } catch (e) { return ''; } if (!src) return '';
+  return await new Promise(res => { const im = new Image(); im.onload = () => { const k = Math.min(1, max / Math.max(im.width, im.height)); const c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', .7)); }; im.onerror = () => res(''); im.src = src; });
+}
+Object.assign(STUDIO_A, {
+  async saveSite() { try { await setDoc(doc(db, 'settings', 'main'), { website: readSite() }, { merge: true }); toast('Saved. Press Publish website to put it live.'); } catch (e) { toast('Could not save: ' + (e.code || '')); } },
+  async publishSite(_, btn) {
+    const w = { ...wcfg(), ...readSite() }; btn.disabled = true; btn.textContent = 'Publishing…';
+    try {
+      const offers = (S.offers || []).filter(o => o.published !== false && (o.aud || 'all') === 'all' && (!o.validTo || o.validTo >= today())).sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || '')).slice(0, 6);
+      const out = []; for (const o of offers) out.push({ title: o.title || '', destination: o.destination || '', nights: num(o.nights) || '', badge: o.badge || '', validTo: o.validTo || '', price: w.showPrices && num(o.priceFrom) ? fmt(o.priceFrom, o.currency) : '', photo: await thumb((o.photos || [])[0] || ((o.program || [])[0]?.photos || [])[0]) });
+      const dests = lines(w.dests).map(l => { const [name, photo, text] = cells(l); return { name, photo: /^https:\/\//.test(photo || '') ? photo : '', text: text || '' }; });
+      const p = cfg().portal || {};
+      await setDoc(doc(db, 'settings', 'public'), { ...w, why: lines(w.why), dests, offers: out, social: { instagram: p.instagram || '', facebook: p.facebook || '', linkedin: p.linkedin || '', tiktok: p.tiktok || '' }, updatedAt: new Date().toISOString() });
+      await setDoc(doc(db, 'settings', 'main'), { website: readSite(), websitePublished: new Date().toISOString() }, { merge: true });
+      toast('Website published');
+    } catch (e) { toast('Could not publish: ' + (e.code || e.message)); }
+    btn.disabled = false; btn.textContent = 'Publish website';
+  },
+  siteGo(id) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); },
+  siteTab(id) { document.querySelectorAll('.lgtab').forEach(b => b.classList.toggle('on', b.dataset.id === id)); const h = $('#lgWho'); if (h) h.textContent = id === 'team' ? 'Le Ceylan team' : 'Travel agent login'; },
+});
+export async function publicHome() {
+  let w = null; try { const s = await getDoc(doc(db, 'settings', 'public')); w = s.exists() ? s.data() : null; } catch (e) { }
+  w = { ...W_DEFAULT, why: W_DEFAULT.why.split('\n'), dests: lines(W_DEFAULT.dests).map(l => { const [name, , text] = cells(l); return { name, text }; }), offers: [], ...(w || {}) };
+  const wa = String(w.whatsapp || '').replace(/[^\d]/g, '');
+  const img = (p, alt) => p ? `<img src="${esc(p)}" alt="${esc(alt)}" loading="lazy">` : '';
+  return `<div class="site"><header class="s-hdr"><div class="brand"><i>LC</i><div><b>Le Ceylan</b><span>Destinations</span></div></div><nav>${[['s-dest', 'Destinations'], ['s-offers', 'Offers'], ['s-about', 'About us'], ['s-contact', 'Contact']].map(([i, l]) => `<button class="link" data-act="siteGo" data-id="${i}">${l}</button>`).join('')}</nav><button class="btn p s" data-act="siteGo" data-id="s-login">Sign in</button></header>
+  <section class="s-hero"${w.hero ? ` style="background-image:linear-gradient(90deg,rgba(29,43,56,.78),rgba(29,43,56,.25)),url('${esc(w.hero)}')"` : ''}><div class="s-hero-in"><div class="s-copy"><h1>${esc(w.headline)}</h1><p>${esc(w.sub)}</p><div class="row" style="gap:10px;flex-wrap:wrap"><a class="btn big" href="#/register">Register your agency</a>${wa ? `<a class="btn big ghost" href="https://wa.me/${wa}" target="_blank" rel="noopener">WhatsApp us</a>` : ''}</div></div>
+  <div class="s-login" id="s-login"><div class="lgtabs"><button class="lgtab on" data-act="siteTab" data-id="agent">Travel agents</button><button class="lgtab" data-act="siteTab" data-id="team">Le Ceylan team</button></div><form id="loginForm"><h2 id="lgWho">Travel agent login</h2><label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><div class="err" id="loginErr"></div><button class="btn p big" type="submit" style="width:100%">Sign in</button><div class="row" style="justify-content:space-between;margin-top:8px"><button class="link" type="button" data-act="forgot">Forgot password?</button><a class="link" href="#/register">New agency? Register</a></div></form></div></div></section>
+  <section class="s-sec" id="s-dest"><h2>Destinations</h2><div class="s-grid">${(w.dests || []).map(d => `<div class="s-card">${d.photo ? img(d.photo, d.name) : `<div class="s-ph-empty">${esc(d.name)}</div>`}<div class="s-cb"><b>${esc(d.name)}</b><p>${esc(d.text || '')}</p></div></div>`).join('')}</div></section>
+  ${(w.offers || []).length ? `<section class="s-sec alt" id="s-offers"><h2>Current offers</h2><div class="s-grid">${w.offers.map(o => `<div class="s-card">${o.photo ? img(o.photo, o.title) : `<div class="s-ph-empty">${esc(o.destination)}</div>`}<div class="s-cb">${o.badge ? `<span class="tag bad">${esc(o.badge)}</span>` : ''}<b>${esc(o.title)}</b><p>${esc([o.destination, o.nights ? o.nights + ' nights' : ''].filter(Boolean).join(' · '))}</p><p class="s-pr">${o.price ? 'From ' + esc(o.price) : 'Sign in for agent prices'}</p></div></div>`).join('')}</div></section>` : '<div id="s-offers"></div>'}
+  <section class="s-sec" id="s-about"><div class="s-about"><div><h2>About us</h2><p>${esc(w.about)}</p></div><ul class="s-why">${(w.why || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul></div></section>
+  <section class="s-sec alt" id="s-contact"><h2>Contact us</h2><div class="s-contact">${w.phone ? `<div><span>Phone</span><b>${esc(w.phone)}</b></div>` : ''}${w.email ? `<div><span>Email</span><a href="mailto:${esc(w.email)}">${esc(w.email)}</a></div>` : ''}${wa ? `<div><span>WhatsApp</span><a href="https://wa.me/${wa}" target="_blank" rel="noopener">${esc(w.whatsapp)}</a></div>` : ''}${w.address ? `<div><span>Office</span><b>${esc(w.address)}</b></div>` : ''}</div></section>
+  <footer class="s-foot">© ${new Date().getFullYear()} Le Ceylan Destinations · ${['instagram', 'facebook', 'linkedin', 'tiktok'].filter(k => /^https:\/\//.test(w.social?.[k] || '')).map(k => `<a href="${esc(w.social[k])}" target="_blank" rel="noopener">${k[0].toUpperCase() + k.slice(1)}</a>`).join(' · ')}</footer></div>`;
+}

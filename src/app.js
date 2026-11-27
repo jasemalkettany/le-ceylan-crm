@@ -7,7 +7,8 @@ import { RATE_COLS, RATE_PAGES, accessFields, ROLE_PRESETS, SHEET_COLS, dayPicke
 import { P } from './portal.js';
 import { MORE_A, setRender, syncTiers, pendingCount, portalFooter } from './more.js';
 import { AGENT_A, loadProfile } from './agentx.js';
-import { STUDIO_A, publicView, importContacts } from './studio.js';
+import { STUDIO_A, publicView, importContacts, publicHome } from './studio.js';
+async function publicOrLogin(msg) { if (msg) { loginView(msg); return; } root.innerHTML = '<div class="boot">Loading…</div>'; try { root.innerHTML = await publicHome(); } catch (e) { loginView(); } }
 Object.assign(MORE_A, AGENT_A, STUDIO_A, {
   previewAgent() { const list = S.agents.filter(a => a.type !== 'Direct customer'); if (!list.length) { toast('Add a travel agent first'); return; }
     openModal('View the agent portal', `<p class="note">See the portal exactly as one of your agents sees it: their offers, prices in their currency and their profit group.</p><label>Agent<select id="pvAgent">${list.map(a => `<option value="${esc(a.id)}">${esc(a.name)}${a.country ? ' · ' + esc(a.country) : ''}${a.currency ? ' · ' + esc(a.currency) : ''}</option>`).join('')}</select></label><div class="row" style="margin-top:12px"><button class="btn p" data-act="startPreview">Open portal</button></div>`); },
@@ -37,7 +38,7 @@ const MODS_STAFF = [
   { k: 'finance', label: 'Finance', icon: 'finance', items: [['finance/recv', 'Invoices'], ['finance/stmt', 'Statements'], ['finance/pay', 'Supplier bills'], ['finance/pl', 'P&L & reports'], ['finance/qb', 'QuickBooks']] },
   { k: 'hr', label: 'HR', icon: 'users', items: [['employees', 'Employees'], ['leave', 'Leave'], ['attendance', 'Attendance'], ['expiries', 'Expiry alerts']] },
   { k: 'chat', label: 'Chat & tasks', icon: 'requests', items: [['chat', 'Team chat'], ['tasks', 'Tasks']] },
-  { k: 'admin', label: 'Admin', icon: 'settings', items: [['users', 'Team & Users'], ['approvals', 'Approvals'], ['settings', 'Companies & settings'], ['portalset', 'Agent portal'], ['contacts', 'Agent contacts'], ['campaigns', 'Email campaigns']] },
+  { k: 'admin', label: 'Admin', icon: 'settings', items: [['users', 'Team & Users'], ['approvals', 'Approvals'], ['settings', 'Companies & settings'], ['portalset', 'Agent portal'], ['website', 'Website'], ['contacts', 'Agent contacts'], ['campaigns', 'Email campaigns']] },
 ];
 const HR_ONLY = ['employees', 'employee', 'expiries'];
 const MODS_AGENT = [
@@ -71,7 +72,7 @@ function loginView(msg = '') {
 }
 onAuthStateChanged(auth, async user => {
   stopAll(); stopChat(); S.user = user; S.me = null; UI.edit = null;
-  if (!user) { if (/^#\/(register|unsub)/.test(location.hash)) root.innerHTML = publicView(location.hash); else loginView(); return; }
+  if (!user) { if (/^#\/(register|unsub)/.test(location.hash)) root.innerHTML = publicView(location.hash); else publicOrLogin(); return; }
   root.innerHTML = '<div class="boot">Opening the register…</div>';
   try {
     const ref = doc(db, 'users', user.uid); const s = await getDoc(ref);
@@ -111,7 +112,7 @@ function route() {
   if (isStaff() && EDIT_COL[current.name]) startEdit();
   render(); scrollTo(0, 0);
 }
-window.addEventListener('hashchange', () => { if (!S.user) { if (/^#\/(register|unsub)/.test(location.hash)) root.innerHTML = publicView(location.hash); else if (!$('#loginForm')) loginView(); return; } route(); });
+window.addEventListener('hashchange', () => { if (!S.user) { if (/^#\/(register|unsub)/.test(location.hash)) root.innerHTML = publicView(location.hash); else if (!$('#loginForm')) publicOrLogin(); return; } route(); });
 function startEdit() {
   const { name, id, params } = current; const col = EDIT_COL[name];
   if (id && id !== 'new') { const r = S[col].find(x => x.id === id); if (!r) { UI.edit = { kind: name, col, waiting: id }; return; } UI.edit = { kind: name, col, rec: clone(r) }; }
