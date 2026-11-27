@@ -113,7 +113,7 @@ P.hotels = { title: 'Hotels', render() {
   <aside class="rh-side">
     <div class="card rh-sum"><b>${esc(s.dest || 'Choose a destination')}</b>${s.city ? `<div class="note">${esc(s.city)}</div>` : ''}<div class="note">${s.cin ? `${nice(s.cin)} – ${nice(s.cout)}` : 'Any dates'}</div><div class="note">${num(s.rooms) || 1} room${num(s.rooms) > 1 ? 's' : ''} · ${num(s.guests) || 2} guests</div><button class="link" data-act="rhEdit">Change search</button></div>
     <div class="rh-view"><button class="${mapView ? '' : 'on'}" data-act="rhView" data-id="list">List view</button><button class="${mapView ? 'on' : ''}" data-act="rhView" data-id="map">Map view</button></div>
-    <div class="card rh-filt"><h3>Hotel name</h3><input id="rf_name" value="${esc(s.name)}" placeholder="For example, Cinnamon" data-act-change="rhName">
+    <button class="btn rh-fbtn" data-act="rhFilt">${s.showF ? 'Hide filters' : 'Filters'}</button><div class="card rh-filt ${s.showF ? 'show' : ''}"><h3>Hotel name</h3><input id="rf_name" value="${esc(s.name)}" placeholder="For example, Cinnamon" data-act-change="rhName">
     ${cities.length ? `<h3>Area</h3><select data-act-change="rhCity"><option value="">All areas</option>${cities.map(c => `<option ${c === s.city ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>` : ''}
     <h3>Sort by</h3><select data-act-change="rhSort">${[['price', 'Lowest price'], ['stars', 'Stars'], ['name', 'Name']].map(([v, l]) => `<option value="${v}" ${v === s.sort ? 'selected' : ''}>${l}</option>`).join('')}</select>
     ${meals.length ? `<h3>Meals</h3>${meals.map(m => chk('meals', m, esc(m))).join('')}` : ''}
@@ -166,6 +166,7 @@ export const RH_A = {
   rhSort(_, el) { hs().sort = el.value; redraw(); },
   rhMax(_, el) { hs().max = el.value; redraw(); },
   rhClear() { Object.assign(hs(), { name: '', city: '', meals: [], starSet: [], free: false, max: '' }); redraw(); },
+  rhFilt() { const s = hs(); s.showF = !s.showF; redraw(); },
   rhJump() { $('#rhRooms')?.scrollIntoView({ behavior: 'smooth' }); },
   rhOpenRecent(id, el) { const s = hs(); if (el.dataset.cin) { s.cin = el.dataset.cin; s.cout = el.dataset.cout; } location.hash = '#/hotel/' + id; },
 };
