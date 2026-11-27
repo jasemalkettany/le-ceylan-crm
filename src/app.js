@@ -7,12 +7,13 @@ import { RATE_COLS, RATE_PAGES, accessFields, ROLE_PRESETS, SHEET_COLS, dayPicke
 import { P } from './portal.js';
 import { MORE_A, setRender, syncTiers, pendingCount, portalFooter } from './more.js';
 import { AGENT_A, loadProfile } from './agentx.js';
+import { RH_A } from './rh.js';
 import { STUDIO_A, publicView, importContacts, publicHome } from './studio.js';
 const HOST = location.hostname; const ON_CRM = /^crm\./.test(HOST); const ON_OWN = /leceylan\.ae$/.test(HOST);
 const CRM_LIVE = true; // switch on once crm.leceylan.ae is served
 const CRM_URL = 'https://crm.leceylan.ae/', AGENT_URL = 'https://www.leceylan.ae/';
 async function publicOrLogin(msg) { if (ON_CRM) { loginView(msg); return; } if (msg) { loginView(msg); return; } root.innerHTML = '<div class="boot">Loading…</div>'; try { root.innerHTML = await publicHome(); } catch (e) { loginView(); } }
-Object.assign(MORE_A, AGENT_A, STUDIO_A, {
+Object.assign(MORE_A, AGENT_A, STUDIO_A, RH_A, {
   previewAgent() { const list = S.agents.filter(a => a.type !== 'Direct customer'); if (!list.length) { toast('Add a travel agent first'); return; }
     openModal('View the agent portal', `<p class="note">See the portal exactly as one of your agents sees it: their offers, prices in their currency and their profit group.</p><label>Agent<select id="pvAgent">${list.map(a => `<option value="${esc(a.id)}">${esc(a.name)}${a.country ? ' · ' + esc(a.country) : ''}${a.currency ? ' · ' + esc(a.currency) : ''}</option>`).join('')}</select></label><div class="row" style="margin-top:12px"><button class="btn p" data-act="startPreview">Open portal</button></div>`); },
   startPreview() { const aid = $('#pvAgent').value; const a = S.agents.find(x => x.id === aid); if (!a) return; closeModal(); stopChat(); S.realMe = S.me; S.me = { ...S.me, role: 'agent', agentId: aid, tier: a.tier || 'A', _preview: true }; S.myAgent = { ...a }; UI.prof = null; UI.sl = null; shell(); startData(onData); location.hash = '#/home'; route(); },
@@ -183,7 +184,7 @@ document.addEventListener('input', e => { if (e.target.id === 'agentQ') { UI.age
 document.addEventListener('change', e => {
   const el = e.target;
   if (el.id === 'contactsIn' && el.files?.[0]) { importContacts(el.files[0]).catch(x => toast('Could not read the file: ' + x.message)); el.value = ''; return; }
-  if (el.dataset.actChange && (AGENT_A[el.dataset.actChange] || STUDIO_A[el.dataset.actChange])) { A[el.dataset.actChange](el.dataset.id, el); return; }
+  if (el.dataset.actChange && (AGENT_A[el.dataset.actChange] || STUDIO_A[el.dataset.actChange] || RH_A[el.dataset.actChange])) { A[el.dataset.actChange](el.dataset.id, el); return; }
   if (el.dataset.filter) { UI.filter[el.dataset.filter] = el.value; render(); return; }
   if (el.dataset.actChange === 'useItin') { const it = S.itineraries.find(x => x.id === el.value); if (it && UI.edit?.rec) { Object.assign(UI.edit.rec, { itinerary: it.days || '', inclusions: it.inclusions || UI.edit.rec.inclusions || '', exclusions: it.exclusions || UI.edit.rec.exclusions || '' }); render(); toast('Itinerary copied'); } return; }
   if (el.id === 'roleSel' || el.id === 'roleEdit') { const box = el.id === 'roleSel' ? $('#accessBox') : $('#accessEdit'); if (box) box.innerHTML = accessFields({ role: el.value }); return; }

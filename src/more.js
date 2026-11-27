@@ -68,13 +68,13 @@ export function buildPortal(kitT) {
   const supOf = x => S.suppliers.find(s => s.id === x.supplierId) || S.suppliers.find(s => (s.name || '').toLowerCase() === (x.supplier || '').toLowerCase()) || {};
   for (const x of rates) {
     if (isNaN(conv(1, x.currency))) { skipped++; continue; }
-    if (x.type === 'Hotel') { const k = `${x.destination}|${x.supplier}`; const s = supOf(x); (hotels[k] = hotels[k] || { kind: 'hotel', name: x.supplier || s.name || '', destination: x.destination || s.destination || '', city: x.city || s.city || '', area: s.area || '', stars: s.stars || '', description: s.description || '', photos: (s.photos || []).slice(0, 4), company: x.company || s.company || '', driverRoom: s.driverRoom === 'Yes', rates: [] }).rates.push(x); }
+    if (x.type === 'Hotel') { const k = `${x.destination}|${x.supplier}`; const s = supOf(x); (hotels[k] = hotels[k] || { kind: 'hotel', name: x.supplier || s.name || '', destination: x.destination || s.destination || '', city: x.city || s.city || '', area: s.area || '', stars: s.stars || '', description: s.description || '', photos: (s.photos || []).slice(0, 5), amenities: String(s.amenities || '').split(',').map(x => x.trim()).filter(Boolean), mapQ: s.mapQ || '', address: s.address || '', cancelDef: s.cancel || '', freeDaysDef: s.freeDays || '', company: x.company || s.company || '', driverRoom: s.driverRoom === 'Yes', rates: [] }).rates.push(x); }
     else if (x.type !== 'Guide') { const k = x.destination || 'Other'; (tours[k] = tours[k] || { kind: 'tour', name: k, destination: x.destination || '', rates: [] }).rates.push(x); }
   }
   const out = {};
   for (const t of tiers()) {
     const price = x => Math.ceil(conv(num(x.cost), x.currency) * (1 + mkFor(t, x.type) / 100));
-    for (const [k, h] of Object.entries(hotels)) { const { rates: rs, ...rest } = h; out[`${t.id}_h_${slug(k)}`] = { ...rest, tier: t.id, currency: pc, rooms: rs.map(x => ({ service: x.service || '', meal: x.meal || '', validFrom: x.validFrom || '', validTo: x.validTo || '', price: price(x), unit: x.unit || '', notes: x.notes || '' })).sort((a, b) => a.price - b.price) }; }
+    for (const [k, h] of Object.entries(hotels)) { const { rates: rs, ...rest } = h; out[`${t.id}_h_${slug(k)}`] = { ...rest, tier: t.id, currency: pc, rooms: rs.map(x => ({ cancel: x.cancel || rest.cancelDef || '', freeDays: num(x.freeDays) || num(rest.freeDaysDef) || 0, service: x.service || '', meal: x.meal || '', validFrom: x.validFrom || '', validTo: x.validTo || '', price: price(x), unit: x.unit || '', notes: x.notes || '' })).sort((a, b) => a.price - b.price) }; }
     for (const [k, g] of Object.entries(tours)) { const { rates: rs, ...rest } = g; out[`${t.id}_t_${slug(k)}`] = { ...rest, tier: t.id, currency: pc, items: rs.map(x => ({ service: x.service || '', type: x.type || '', city: x.city || '', validFrom: x.validFrom || '', validTo: x.validTo || '', price: price(x), unit: x.unit || '', notes: x.notes || '' })).sort((a, b) => a.service.localeCompare(b.service)) }; }
   }
   if (kitT) { const k = parseKitFn(kitT); const kc = k.currency || 'USD';
