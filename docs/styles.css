@@ -291,3 +291,6 @@ body[data-role=dataentry] [data-act^=publish],body[data-role=dataentry] [data-ac
 .s-contact{display:flex;gap:16px;flex-wrap:wrap;justify-content:center}.s-contact>div{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 22px;min-width:200px;text-align:center}.s-contact span{display:block;color:var(--mute);font-size:12px;margin-bottom:4px}.s-contact a{color:var(--indigo);font-weight:600}
 .s-foot{background:#1F3F5B;color:#D6E4F0;text-align:center;padding:20px;font-size:13px}.s-foot a{color:#D6E4F0}
 @media(max-width:900px){.s-hero-in,.s-about{grid-template-columns:1fr}.s-copy h1{font-size:32px}.s-hdr nav{display:none}}
+.lclogo{height:42px;width:auto;display:block}
+.hdr .lclogo{height:36px}.brand-sub{border-left:1px solid var(--line);padding-left:10px;margin-left:4px;line-height:1.15}.brand-sub b{color:var(--indigo);font-size:14px;display:block}.brand-sub span{font-size:11px;color:var(--mute)}
+.s-hdr .lclogo{height:46px}.login-l .lclogo{height:54px;margin-bottom:18px}
