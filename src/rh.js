@@ -123,7 +123,7 @@ P.hotels = { title: 'Hotels', render() {
     ${s.name || s.city || s.meals.length || s.starSet.length || s.free || num(s.max) ? `<button class="btn s" style="margin-top:12px;width:100%" data-act="rhClear">Clear filters</button>` : ''}</div>
   </aside>
   <section class="rh-list ${mapView ? 'withmap' : ''}"><div class="card rh-head"><h1>${esc(s.city || s.dest || 'Hotels')}: ${res.length} ${res.length === 1 ? 'hotel' : 'hotels'}</h1><p class="note">Our contracted hotels with your prices${n ? ` for ${n} nights` : ''}. Availability is confirmed on request.</p></div>
-    <div class="${mapView ? 'rh-split' : ''}"><div>${res.map(card).join('') || '<div class="empty">No hotels match. Try another area or clear a filter.</div>'}</div>
+    <div class="${mapView ? 'rh-split' : ''}"><div>${res.map(card).join('') || (all.length ? '<div class="empty">No hotels match. Try another area or clear a filter.</div>' : `<div class="empty">${S.me?._preview ? 'No hotels are published yet. Add hotel rates in Rates & supply, then press Publish in Admin → Agent portal.' : 'Our hotel list is being updated. Send us an offline request and we will quote you.'}</div>`)}</div>
     ${mapView ? `<div class="rh-map card">${sel ? `<iframe title="Map of ${esc(sel.h.name)}" src="${esc(mapSrc(mapQ(sel.h)))}" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe><div class="rh-mapcap"><b>${esc(sel.h.name)}</b> <a class="link" href="#/hotel/${esc(sel.h.id)}">Open</a></div>` : '<div class="empty">No hotel to show.</div>'}</div>` : ''}</div>
   </section></div>`;
 } };
