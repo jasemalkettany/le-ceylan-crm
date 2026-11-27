@@ -9,7 +9,7 @@ import { MORE_A, setRender, syncTiers, pendingCount, portalFooter } from './more
 import { AGENT_A, loadProfile } from './agentx.js';
 import { STUDIO_A, publicView, importContacts, publicHome } from './studio.js';
 const HOST = location.hostname; const ON_CRM = /^crm\./.test(HOST); const ON_OWN = /leceylan\.ae$/.test(HOST);
-const CRM_LIVE = false; // switch on once crm.leceylan.ae is served
+const CRM_LIVE = true; // switch on once crm.leceylan.ae is served
 const CRM_URL = 'https://crm.leceylan.ae/', AGENT_URL = 'https://www.leceylan.ae/';
 async function publicOrLogin(msg) { if (ON_CRM) { loginView(msg); return; } if (msg) { loginView(msg); return; } root.innerHTML = '<div class="boot">Loading…</div>'; try { root.innerHTML = await publicHome(); } catch (e) { loginView(); } }
 Object.assign(MORE_A, AGENT_A, STUDIO_A, {
