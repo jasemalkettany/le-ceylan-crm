@@ -9,6 +9,7 @@ import { MORE_A, setRender, syncTiers, pendingCount, portalFooter } from './more
 import { AGENT_A, loadProfile } from './agentx.js';
 import { STUDIO_A, publicView, importContacts, publicHome } from './studio.js';
 const HOST = location.hostname; const ON_CRM = /^crm\./.test(HOST); const ON_OWN = /leceylan\.ae$/.test(HOST);
+const CRM_LIVE = false; // switch on once crm.leceylan.ae is served
 const CRM_URL = 'https://crm.leceylan.ae/', AGENT_URL = 'https://www.leceylan.ae/';
 async function publicOrLogin(msg) { if (ON_CRM) { loginView(msg); return; } if (msg) { loginView(msg); return; } root.innerHTML = '<div class="boot">Loading…</div>'; try { root.innerHTML = await publicHome(); } catch (e) { loginView(); } }
 Object.assign(MORE_A, AGENT_A, STUDIO_A, {
@@ -82,7 +83,7 @@ onAuthStateChanged(auth, async user => {
     S.me = { id: s.id, ...s.data() };
     if (S.me.active === false) { await signOut(auth); loginView('This login is suspended.'); return; }
   } catch (e) { console.error(e); await signOut(auth); loginView('Could not open your workspace: ' + (e.code || e.message)); return; }
-  if (ON_OWN && isStaff() && !ON_CRM) { location.href = CRM_URL; return; }
+  if (CRM_LIVE && ON_OWN && isStaff() && !ON_CRM) { location.href = CRM_URL; return; }
   if (ON_OWN && !isStaff() && ON_CRM) { location.href = AGENT_URL; return; }
   shell(); startData(onData); if (isStaff()) startChat(onChat);
   if (!location.hash || location.hash === '#/') location.hash = isStaff() ? '#/dashboard' : '#/home'; else route();
