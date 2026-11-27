@@ -13,10 +13,11 @@ const HOST = location.hostname; const ON_CRM = /^crm\./.test(HOST); const ON_OWN
 const CRM_LIVE = true; // switch on once crm.leceylan.ae is served
 const CRM_URL = 'https://crm.leceylan.ae/', AGENT_URL = 'https://www.leceylan.ae/';
 async function publicOrLogin(msg) { if (ON_CRM) { loginView(msg); return; } if (msg) { loginView(msg); return; } root.innerHTML = '<div class="boot">Loading…</div>'; try { root.innerHTML = await publicHome(); } catch (e) { loginView(); } }
+const DEMO_AGENT = { id: '_demo', name: 'Demo agency (sample)', country: 'United Arab Emirates', currency: 'AED', tier: 'A', creditLimit: 50000, wallet: 5000 };
 Object.assign(MORE_A, AGENT_A, STUDIO_A, RH_A, {
-  previewAgent() { const list = S.agents.filter(a => a.type !== 'Direct customer'); if (!list.length) { toast('Add a travel agent first'); return; }
+  previewAgent() { const list = [...S.agents.filter(a => a.type !== 'Direct customer'), DEMO_AGENT];
     openModal('View the agent portal', `<p class="note">See the portal exactly as one of your agents sees it: their offers, prices in their currency and their profit group.</p><label>Agent<select id="pvAgent">${list.map(a => `<option value="${esc(a.id)}">${esc(a.name)}${a.country ? ' · ' + esc(a.country) : ''}${a.currency ? ' · ' + esc(a.currency) : ''}</option>`).join('')}</select></label><div class="row" style="margin-top:12px"><button class="btn p" data-act="startPreview">Open portal</button></div>`); },
-  startPreview() { const aid = $('#pvAgent').value; const a = S.agents.find(x => x.id === aid); if (!a) return; closeModal(); stopChat(); S.realMe = S.me; S.me = { ...S.me, role: 'agent', agentId: aid, tier: a.tier || 'A', _preview: true }; S.myAgent = { ...a }; UI.prof = null; UI.sl = null; shell(); startData(onData); location.hash = '#/home'; route(); },
+  startPreview() { const aid = $('#pvAgent').value; const a = aid === DEMO_AGENT.id ? DEMO_AGENT : S.agents.find(x => x.id === aid); if (!a) return; closeModal(); stopChat(); S.realMe = S.me; S.me = { ...S.me, role: 'agent', agentId: aid, tier: a.tier || 'A', _preview: true }; S.myAgent = { ...a }; UI.prof = null; UI.sl = null; shell(); startData(onData); location.hash = '#/home'; route(); },
   exitPreview() { if (!S.realMe) return; S.me = S.realMe; S.realMe = null; S.myAgent = null; UI.prof = null; shell(); startData(onData); startChat(onChat); location.hash = '#/dashboard'; route(); },
 });
 import { ROLES, roleName } from './core.js';

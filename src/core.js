@@ -133,7 +133,7 @@ export function startData(onData) {
     for (const c of ['employees', 'leaves', 'attendance']) sub(c, UI.canHR ? collection(db, c) : query(collection(db, c), where('userId', '==', S.user.uid)), onData);
   } else if (S.me?.role === 'agent' && S.me.agentId) {
     const aid = S.me.agentId;
-    unsubs.push(onSnapshot(doc(db, 'agents', aid), s => { S.myAgent = s.exists() ? { id: s.id, ...s.data() } : null; onData(); }, () => { }));
+    unsubs.push(onSnapshot(doc(db, 'agents', aid), s => { S.myAgent = s.exists() ? { id: s.id, ...s.data() } : (S.me?._preview ? S.myAgent : null); onData(); }, () => { }));
     sub('offers', query(collection(db, 'offers'), where('published', '==', true)), onData);
     sub('itineraries', query(collection(db, 'itineraries'), where('published', '==', true)), onData);
     sub('bookings', query(collection(db, 'portalBookings'), where('agent', '==', aid)), onData);
