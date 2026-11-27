@@ -8,7 +8,9 @@ import { P } from './portal.js';
 import { MORE_A, setRender, syncTiers, pendingCount, portalFooter } from './more.js';
 import { AGENT_A, loadProfile } from './agentx.js';
 import { STUDIO_A, publicView, importContacts, publicHome } from './studio.js';
-async function publicOrLogin(msg) { if (msg) { loginView(msg); return; } root.innerHTML = '<div class="boot">Loading…</div>'; try { root.innerHTML = await publicHome(); } catch (e) { loginView(); } }
+const HOST = location.hostname; const ON_CRM = /^crm\./.test(HOST); const ON_OWN = /leceylan\.ae$/.test(HOST);
+const CRM_URL = 'https://crm.leceylan.ae/', AGENT_URL = 'https://www.leceylan.ae/';
+async function publicOrLogin(msg) { if (ON_CRM) { loginView(msg); return; } if (msg) { loginView(msg); return; } root.innerHTML = '<div class="boot">Loading…</div>'; try { root.innerHTML = await publicHome(); } catch (e) { loginView(); } }
 Object.assign(MORE_A, AGENT_A, STUDIO_A, {
   previewAgent() { const list = S.agents.filter(a => a.type !== 'Direct customer'); if (!list.length) { toast('Add a travel agent first'); return; }
     openModal('View the agent portal', `<p class="note">See the portal exactly as one of your agents sees it: their offers, prices in their currency and their profit group.</p><label>Agent<select id="pvAgent">${list.map(a => `<option value="${esc(a.id)}">${esc(a.name)}${a.country ? ' · ' + esc(a.country) : ''}${a.currency ? ' · ' + esc(a.currency) : ''}</option>`).join('')}</select></label><div class="row" style="margin-top:12px"><button class="btn p" data-act="startPreview">Open portal</button></div>`); },
@@ -65,7 +67,7 @@ function loginView(msg = '') {
   root.innerHTML = `<div class="login"><div class="login-l"><div class="brand"><img src="logo.png" alt="Le Ceylan Destinations" class="lclogo"></div><form id="loginForm"><h1>Welcome back.</h1><p class="lead">Sign in to your travel workspace.</p>
   <label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label>
   <div class="err" id="loginErr">${esc(msg)}</div><button class="btn p big" type="submit">Sign in →</button><button class="link" type="button" data-act="forgot" style="justify-self:end">Forgot password?</button>
-  <p class="note" style="border-top:1px solid var(--line);padding-top:14px;margin-top:6px">Travel agent? Use the login your Le Ceylan account manager issued you. New agency? <a href="#/register">Register here</a>.</p></form></div>
+  <p class="note" style="border-top:1px solid var(--line);padding-top:14px;margin-top:6px">Travel agent? Sign in at <a href="https://www.leceylan.ae/">www.leceylan.ae</a>.</p></form></div>
   <div class="login-r"><h2>Every trip. Every detail.<br><span>One workspace.</span></h2><p>One workspace for the people, plans and details behind every journey.</p>
   <ul><li><b>Build the right quotation</b><span>Hotel rates, transport and activities together.</span></li><li><b>Keep every booking moving</b><span>Clear confirmations, passenger details and itineraries.</span></li><li><b>Know where your business stands</b><span>Invoices, supplier bills and multi-currency accounts.</span></li></ul>
   <div class="dests">${DEST.slice(0, 8).map(d => `<span>${esc(d)}</span>`).join('')}</div></div></div>`;
@@ -80,6 +82,8 @@ onAuthStateChanged(auth, async user => {
     S.me = { id: s.id, ...s.data() };
     if (S.me.active === false) { await signOut(auth); loginView('This login is suspended.'); return; }
   } catch (e) { console.error(e); await signOut(auth); loginView('Could not open your workspace: ' + (e.code || e.message)); return; }
+  if (ON_OWN && isStaff() && !ON_CRM) { location.href = CRM_URL; return; }
+  if (ON_OWN && !isStaff() && ON_CRM) { location.href = AGENT_URL; return; }
   shell(); startData(onData); if (isStaff()) startChat(onChat);
   if (!location.hash || location.hash === '#/') location.hash = isStaff() ? '#/dashboard' : '#/home'; else route();
 });
